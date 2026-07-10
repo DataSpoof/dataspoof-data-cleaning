@@ -1,0 +1,48 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "AutomatedCleaning"
+version = "2.0.0"
+description = "Automated Data Cleaning Library with a Rust compute backend"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Abhishek Kumar Singh", email = "dataspoof007@gmail.com" }]
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+# Python-side runtime dependencies. The heavy per-row/number-crunching work now
+# lives in the Rust backend (`automatedcleaning._rustcore`); these libraries
+# cover the parts that stay in Python (I/O, ML, dashboards, PII, AI).
+dependencies = [
+    "polars>=1.23",
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "pyarrow>=19.0",
+    "nltk>=3.9",
+    "scikit-learn>=1.5",
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "missingno>=0.5",
+    "plotly>=6.0",
+    "pyfiglet>=1.0",
+    "langchain-anthropic>=0.3",
+    "presidio-analyzer",
+    "presidio-anonymizer",
+]
+
+[project.urls]
+Homepage = "https://github.com/DataSpoof/AutomatedCleaning"
+
+[tool.maturin]
+# Mixed Rust/Python project: the `automatedcleaning` package lives at the repo
+# root and the compiled extension is injected into it as `_rustcore`.
+python-source = "."
+module-name = "automatedcleaning._rustcore"
+features = ["pyo3/extension-module"]

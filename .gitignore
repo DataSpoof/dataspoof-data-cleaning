@@ -6,3 +6,15 @@ build/
 *.log
 output/
 *.csv
+
+# Rust build artifacts
+/target
+Cargo.lock
+
+# Compiled Rust extension dropped into the package for in-place testing
+automatedcleaning/*.pyd
+automatedcleaning/*.so
+
+# Python bytecode
+__pycache__/
+*.pyc

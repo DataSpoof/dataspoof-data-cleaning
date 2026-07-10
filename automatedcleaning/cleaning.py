@@ -1,31 +1,77 @@
-import polars as pl
+# === Core Python ===
+import os
+import math
+import json
+import re
+import shutil
+import base64
+import warnings
+import logging
+from typing import Dict, List
+
+# === Data Handling ===
 import numpy as np
+import pandas as pd
+import polars as pl
+
+# === NLP & Text Processing ===
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
+# === Visualization ===
+import matplotlib.pyplot as plt
+import seaborn as sns
+import missingno as msno
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+
+# === Sklearn ===
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import LabelEncoder
-import seaborn as sns
-import matplotlib.pyplot as plt
-from spellchecker import SpellChecker
-import warnings
-import math
-import os
-import missingno as msno
-import logging
 
-# Suppress NLTK download messages
+# === PII Detection (Presidio) ===
+from presidio_analyzer import AnalyzerEngine, RecognizerResult
+from presidio_anonymizer import AnonymizerEngine
+
+# === Other Libraries ===
+from langchain_anthropic import ChatAnthropic
+import difflib
+import pyfiglet
+import getpass
+
+# === Rust compute backend ===
+# CPU-bound work (text cleaning, symbol stripping, IQR outliers, skewness,
+# correlation/multicollinearity, JSON detection) is delegated to this compiled
+# Rust extension for speed and real (GIL-free) parallelism.
+from . import _rustcore
+
+# === Setup & Logging Cleanup ===
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore")
+logging.getLogger().setLevel(logging.ERROR)
+nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
+nltk.download('wordnet', quiet=True)  # required by the WordNet lemmatizer
 nltk_logger = logging.getLogger('nltk')
 nltk_logger.setLevel(logging.ERROR)
 
-# OR Suppress all warnings in NLTK
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
+
+# English stopword list, materialised once and reused by the Rust text backend.
+_STOPWORDS = list(stopwords.words("english"))
 
 
-import difflib
+def _to_f64_list(series):
+    """Convert a Polars numeric Series to a list of floats, mapping nulls to NaN
+    so the Rust backend (which ignores NaN) sees the same data Polars would."""
+    return [float(x) if x is not None else float("nan") for x in series.to_list()]
 
 
 
-# Suppress all warnings
-warnings.filterwarnings('ignore')
+
 
 
 def print_section_header(title):
@@ -36,8 +82,6 @@ def print_section_header(title):
 
 
 
-import pyfiglet
-import shutil
 
 def print_header(title):
     """Prints a formatted section header with ASCII art font centered in the terminal."""
@@ -71,7 +115,6 @@ def load_data(file_path):
 
 
 
-import json
 
 contractions = {"ain't": "am not", "aren't": "are not", "can't": "cannot", 
 "can't've": "cannot have", "'cause": "because", "could've": "could have", 
@@ -102,56 +145,21 @@ contractions = {"ain't": "am not", "aren't": "are not", "can't": "cannot",
 
 
 
-import re
-import nltk
-import json
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-nltk.download('punkt_tab')
-nltk.download('punkt')  # For tokenization
-nltk.download('stopwords')  # For stopword removal
-from nltk.stem import WordNetLemmatizer
 
 
 def preprocess_text(text, remove_stopwords=True):
+    """Clean a single text value.
+
+    The heavy work (lowercasing, contraction expansion, URL/mention/special-char/
+    emoji stripping, tokenization and stopword removal) runs in the Rust backend.
+    WordNet lemmatization stays in Python so its output matches the original.
+    """
     if text is None or not isinstance(text, str):
         return ""
-    text = text.lower()
-    text = text.split()
-    new_text = [contractions[word] if word in contractions else word for word in text]
-    text = " ".join(new_text)
-    
-    # Remove URLs, usernames, special characters, and emojis
-    text = re.sub(r'https?:\/\/.*[\r\n]*', '', text, flags=re.MULTILINE)
-    text = re.sub(r'@[A-Za-z0-9]+', '', text)
-    text = re.sub(r'[_"\-;%()|+&=*%,!?:#$@\[\]/]', ' ', text)
-    text = re.sub(r'\<a href', ' ', text)
-    text = re.sub(r'&amp;', '', text)
-    text = re.sub(r'<br />', ' ', text)
-    text = re.sub(r'\'"', ' ', text)
-    
-    emoji_pattern = re.compile("[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF" 
-                               "\U0001F680-\U0001F6FF\U0001F700-\U0001F77F" 
-                               "\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF" 
-                               "\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F" 
-                               "\U0001FA70-\U0001FAFF\U00002702-\U000027B0" 
-                               "\U000024C2-\U0001F251]+", flags=re.UNICODE)
-    text = emoji_pattern.sub(r'', text)
-    
-    # Tokenization
-    words = word_tokenize(text)
-    
-    # Stopword removal
-    if remove_stopwords:
-        stop_words = set(stopwords.words("english"))
-        words = [word for word in words if word not in stop_words]
-    
-    # Lemmatization
+    stop = _STOPWORDS if remove_stopwords else []
+    cleaned = _rustcore.preprocess_texts([text], stop, remove_stopwords)[0]
     lemmatizer = WordNetLemmatizer()
-    words = [lemmatizer.lemmatize(word) for word in words]
-    
-
-    return " ".join(words)
+    return " ".join(lemmatizer.lemmatize(word) for word in cleaned.split())
 
 
 
@@ -226,20 +234,9 @@ def detect_column_types_and_process_text(df):
             # Take a sample of non-null values
             sample_values = df.filter(pl.col(col).is_not_null()).head(json_sample_count)[col].to_list()
             
-            # JSON detection heuristic: check if strings start with { or [ and parse as JSON
-            json_count = 0
-            for value in sample_values:
-                value_str = str(value).strip()
-                if (value_str.startswith('{') and value_str.endswith('}')) or \
-                   (value_str.startswith('[') and value_str.endswith(']')):
-                    try:
-                        json.loads(value_str)
-                        json_count += 1
-                    except:
-                        pass
-            
-            # If more than 50% of samples (lowered threshold for your dataset) are valid JSON, classify as JSON
-            is_json = json_count > 0 and (json_count / len(sample_values) >= 0.5)
+            # JSON detection heuristic (Rust backend): >=50% of sampled non-null
+            # values both look like a JSON object/array and parse successfully.
+            is_json = _rustcore.detect_json_sample([str(v).strip() for v in sample_values])
         
         # Determine column type
         if is_json:
@@ -251,9 +248,12 @@ def detect_column_types_and_process_text(df):
         else:
             col_type = "text"
             text_cols.add(col)
-            pandas_series = df[col].to_pandas()
-            processed_series = pandas_series.apply(preprocess_text)
-            df = df.with_columns(pl.Series(col, processed_series))
+            # Batch the whole column through the Rust backend in one call
+            # (parallel, GIL released), then lemmatize in Python for parity.
+            cleaned = _rustcore.preprocess_texts(df[col].to_list(), _STOPWORDS, True)
+            lemmatizer = WordNetLemmatizer()
+            processed = [" ".join(lemmatizer.lemmatize(w) for w in c.split()) for c in cleaned]
+            df = df.with_columns(pl.Series(col, processed))
  
             
         results.append({
@@ -317,6 +317,27 @@ def replace_symbols_and_convert_to_float(df):
     return df
 
 
+
+def replace_symbols(df):
+    """Strip currency/separator symbols ($ ₹ , - •) from string columns.
+
+    Symbol removal runs in the Rust backend (parallel, per value)."""
+
+    # Identify columns containing unwanted symbols
+    problematic_cols = [
+        col for col in df.columns
+        if df[col].cast(pl.Utf8, strict=False).str.contains(r'[\$,₹,-]', literal=False).any()
+    ]
+
+    for col in problematic_cols:
+        values = df[col].cast(pl.Utf8, strict=False).to_list()
+        stripped = _rustcore.strip_symbols(values)  # removes $ ₹ , - •
+        df = df.with_columns(pl.Series(col, stripped))
+
+    return df
+
+
+
 def fix_incorrect_data_types(df):
     for col in df.columns:
         try:
@@ -327,9 +348,6 @@ def fix_incorrect_data_types(df):
             print(f"Could not convert column {col} due to: {e}")
     return df
 
-
-import polars as pl
-import difflib
 
 def fix_spelling_errors_in_columns(df):
     """Fix spelling errors in column names by interacting with the user."""
@@ -370,40 +388,71 @@ def fix_spelling_errors_in_columns(df):
     
     return df
 
-
-
-
-import os
-import json
-import polars as pl
-import logging
-import getpass
-from langchain_anthropic import ChatAnthropic
-
 # Initialize logging
 logging.basicConfig(filename="corrections.log", level=logging.INFO, format="%(asctime)s - %(message)s")
 
 # System prompt for categorical value correction
 CATEGORICAL_CORRECTION_PROMPT = """
-You are a data validation expert. Check if the given categorical values are valid.
-Fix any incorrect values based on context and common categories.
-Return only the corrected values.
+You are a data validation expert. Your task is to correct spelling errors and inconsistencies in categorical values.
+- Ensure all values are standardized and correctly spelled.
+- Return the corrected values **in the same order** as provided.
+- Use a bullet-point format (one value per line).
+
+Example input:
+Column: ProductCategory
+Values: ['elecronics', 'fashon', 'Electronics', 'fasihon', 'home_appl']
+
+Expected output:
+- Electronics
+- Fashion
+- Electronics
+- Fashion
+- Home Appliances
+
+Example input:
+Column: ProductCategory
+Values: ['good', 'bad', 'goo', 'ba']
+
+Expected output:
+- good
+- bad
+- good
+- bad
+
 """
 
-def fix_spelling_errors_in_categorical(df):
-    """Fix spelling errors in categorical columns using Claude AI."""
-    print_section_header("Fix spelling errors in categorical columns using Claude")
 
-    api_key = getpass.getpass("Enter your Claude API key: ")
-    model = ChatAnthropic(model="claude-3-7-sonnet-latest", api_key=api_key)
+
+def fix_spelling_errors_in_categorical(df):
+    """Fix spelling errors in categorical columns using Claude AI or manual input."""
+    print_section_header("Fix spelling errors in categorical columns")
     
+    user_choice = input("Do you want to correct spelling errors in categorical columns? (yes/no): ").strip().lower()
+    if user_choice not in ["yes", "y"]:
+        print("Skipping spell-checking.")
+        return df
+
+    method_choice = input("Choose correction method: (1) Automatic (Claude AI) (2) Manual: ").strip()
+    
+    if method_choice == "1":
+        api_key = getpass.getpass("Enter your Claude API key: ")
+        model = ChatAnthropic(model="claude-3-7-sonnet-latest", api_key=api_key)
+    else:
+        model = None  # No AI model needed for manual correction
+
     categorical_columns = [col for col in df.columns if df[col].dtype == pl.Utf8]
-    
+
     for col in categorical_columns:
         unique_values = df[col].drop_nulls().unique().to_list()
-        corrected_values = correct_categorical_values(model, col, unique_values)
+        
+        if method_choice == "1":
+            corrected_values = correct_categorical_values(model, col, unique_values)
+        else:
+            corrected_values = manual_correction(col, unique_values)
+        
         correction_map = dict(zip(unique_values, corrected_values))
-        print(f"The unique values are {unique_values} and the fixed values are {corrected_values} ")
+        
+        print(f"\nColumn: {col}\nOriginal Values: {unique_values}\nCorrected Values: {corrected_values}")
 
         # Log corrections
         for old_value, new_value in correction_map.items():
@@ -414,6 +463,7 @@ def fix_spelling_errors_in_categorical(df):
     
     return df
 
+
 def correct_categorical_values(model, column_name: str, values: list) -> list:
     """Corrects categorical column values using Claude AI."""
     text = f"Column: {column_name}\nValues: {', '.join(values)}"
@@ -422,9 +472,28 @@ def correct_categorical_values(model, column_name: str, values: list) -> list:
         {"role": "user", "content": text},
     ]
     response = model.invoke(model_input)
-    corrected_values = response.content.split(', ')  # Assuming response returns comma-separated values
+
+    # Ensure response is properly formatted and split into a clean list
+    corrected_values = response.content.strip().split("\n")
+
+    # If response length is incorrect, return original values
+    if len(corrected_values) != len(values):
+        logging.warning(f"Unexpected response format for column '{column_name}'. Received: {response.content}")
+        return values  # Return original values if there's an issue
+
     return corrected_values
 
+
+def manual_correction(column_name: str, values: list) -> list:
+    """Allows user to manually correct categorical values."""
+    corrected_values = []
+    print(f"\nManual correction for column: {column_name}")
+    
+    for val in values:
+        new_val = input(f"Correct '{val}' (press enter to keep it unchanged): ").strip()
+        corrected_values.append(new_val if new_val else val)
+    
+    return corrected_values
 
 
 
@@ -435,16 +504,14 @@ def handle_negative_values(df):
     # Identify numerical columns in Polars
     numeric_cols = [col for col, dtype in df.schema.items() if dtype in [pl.Float64, pl.Int64, pl.Int32, pl.Float32]]
 
-    # Iterate over numerical columns and check for negatives
+    # Iterate over numerical columns and check for negatives (Rust backend)
     for col in numeric_cols:
-        min_val = df[col].min()
-        
-        if min_val < 0:
+        if _rustcore.has_negative(_to_f64_list(df[col])):
             print(f"Column '{col}' contains negative values.")
-            
+
             # Replace negative values with their absolute counterparts
             df = df.with_columns(pl.col(col).abs().alias(col))
-    
+
     return df
 
 
@@ -515,21 +582,25 @@ def check_outliers(df):
     return outliers
 
 def remove_outliers(df):
-    """Remove outliers using IQR method for numerical columns."""
+    """Remove outliers using the IQR method for numerical columns (Rust backend)."""
     numerical_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
     for col in numerical_cols:
-        Q1 = df[col].quantile(0.25)
-        Q3 = df[col].quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        df = df.filter((df[col] >= lower_bound) & (df[col] <= upper_bound))
+        keep_mask = _rustcore.iqr_keep_mask(_to_f64_list(df[col]))
+        df = df.filter(pl.Series(keep_mask))
     return df
 
 
 
-import polars as pl
-import polars as pl
+def check_problem_type(df, target_col):
+    """Determine whether the problem is classification or regression."""
+    unique_values = df[target_col].n_unique()
+    
+    if df[target_col].dtype in [pl.Float32, pl.Float64, pl.Int32, pl.Int64] and unique_values > 10:
+        print(f"Detected a regression problem (continuous target column '{target_col}'). Skipping class balancing.")
+        return "regression"
+    else:
+        print(f"Detected a classification problem (categorical/discrete target column '{target_col}').")
+        return "classification"
 
 def check_and_handle_imbalance(df, target_col):
     """
@@ -540,8 +611,11 @@ def check_and_handle_imbalance(df, target_col):
     - target_col (str): The name of the target column
     
     Returns:
-    - pl.DataFrame: A balanced dataframe
+    - pl.DataFrame: A balanced dataframe or the original if skipped
     """
+    
+    if check_problem_type(df, target_col) == "regression":
+        return df  # Skip class balancing if it's a regression problem
     
     # Original Class Distribution
     class_counts = df[target_col].value_counts().sort("count")
@@ -555,8 +629,12 @@ def check_and_handle_imbalance(df, target_col):
         print(f"\nThe target column '{target_col}' is **imbalanced**.")
         
         # Ask the user for input
-        method = input("\nChoose a balancing method - 'oversampling' or 'undersampling': ").strip().lower()
+        method = input("\nChoose a balancing method - 'oversampling', 'undersampling', or press Enter to skip: ").strip().lower()
         
+        if method == "":
+            print("\nSkipping class balancing.")
+            return df
+
         balanced_df = []
 
         if method == "oversampling":
@@ -575,7 +653,7 @@ def check_and_handle_imbalance(df, target_col):
                 balanced_df.append(subset)
 
         else:
-            raise ValueError("\nInvalid method. Please choose 'oversampling' or 'undersampling'.")
+            raise ValueError("\nInvalid method. Please choose 'oversampling', 'undersampling', or press Enter to skip.")
 
         # Combine all balanced samples and shuffle
         df = pl.concat(balanced_df).sample(fraction=1.0, shuffle=True)
@@ -586,36 +664,36 @@ def check_and_handle_imbalance(df, target_col):
 
     return df
 
-
 def check_skewness(df):
     """Check skewness in numerical columns."""
     return df.select(pl.col(pl.Float64, pl.Int64)).skew()
 
 def fix_skewness(df):
-    """Fix skewness using log transformation."""
+    """Fix skewness using log transformation (skewness computed in Rust)."""
     numerical_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
     for col in numerical_cols:
-        if df[col].skew() > 1:
-            df = df.with_columns(pl.log(df[col] + 1).alias(col))
+        if _rustcore.skewness(_to_f64_list(df[col])) > 1:
+            df = df.with_columns((df[col] + 1).log().alias(col))
     return df
 
 def check_multicollinearity(df, threshold=0.7):
-    """Check for multicollinearity using correlation matrix and remove highly correlated features."""
+    """Check for multicollinearity and drop highly correlated features.
+
+    The correlation matrix and drop-list are computed in the Rust backend."""
     num_df = df.select(pl.col(pl.Float64, pl.Int64))
-    correlation_matrix = num_df.corr()
-    
-    to_drop = set()
-    for i in range(len(correlation_matrix.columns)):
-        for j in range(i):
-            if abs(correlation_matrix[i, j]) > threshold:
-                to_drop.add(correlation_matrix.columns[i])
-    
+    names = num_df.columns
+
+    to_drop = []
+    if len(names) >= 2:
+        columns = [_to_f64_list(num_df[c]) for c in names]
+        to_drop = _rustcore.collinear_to_drop(columns, names, threshold)
+
     if to_drop:
         print(f"Dropping highly correlated columns: {', '.join(to_drop)}")
         df = df.drop(to_drop)
     else:
         print("No highly correlated features found above the threshold.")
-    
+
     return df
 
 
@@ -679,188 +757,367 @@ def save_cleaned_data(df: pl.DataFrame, file_name="cleaned_data.csv", quantize=T
     print(f"✅ Cleaned data saved to {file_name}")
 
 
-def save_boxplots(df: pl.DataFrame, output_filename="output/boxplots.png"):
-    """
-    Create boxplots for numerical columns in a DataFrame and save the plot as a PNG file.
-    
-    Parameters:
-        df (pl.DataFrame): The input DataFrame.
-        output_filename (str): The filename for saving the boxplots image.
-    """
-    print_section_header("Checking for outliers")
-    
-    # Ensure the output directory exists
-    output_dir = os.path.dirname(output_filename)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        print(f"Created directory: {output_dir}")
-    
-    # Select numerical columns
-    numerical_cols = [col for col in df.columns if df[col].dtype in [pl.Int64, pl.Float64]]
-    print(f"Numerical columns found: {numerical_cols}")
-    
-    if not numerical_cols:
-        print("No numerical columns found in the DataFrame.")
-        return
-    
-    # Determine the number of rows and columns for subplots
-    num_cols = len(numerical_cols)
-    cols_per_row = 3
-    num_rows = math.ceil(num_cols / cols_per_row)
-    
-    # Create subplots
-    fig, axes = plt.subplots(num_rows, min(num_cols, cols_per_row), figsize=(15, 5 * num_rows))
-    axes = axes.flatten() if num_cols > 1 else [axes]
-    
-    # Plot boxplots
-    for i, col in enumerate(numerical_cols):
-        axes[i].boxplot(df[col].to_list(), vert=True)
-        axes[i].set_title(f"Boxplot of {col}")
-    
-    # Hide any unused subplots
-    for j in range(i + 1, len(axes)):
-        axes[j].set_visible(False)
-    
-    # Save the plot
-    plt.tight_layout()
-    plt.savefig(output_filename)
-    print(f"Boxplots saved as '{output_filename}'")
-    plt.close()
+def save_dashboard(html_content, filename="dashboard.html"):
+    OUTPUT_DIR = "output/eda/"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(OUTPUT_DIR, filename), "w", encoding="utf-8") as f:
+        f.write(html_content)
 
-
-
-import os
-import plotly.express as px
-import plotly.graph_objects as go
-import polars as pl
-from plotly.subplots import make_subplots
-
-# Define output directory
-OUTPUT_DIR = "output/eda/"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-def save_plot(fig, filename):
-    """Save the plotly figure to the output directory."""
-    fig.write_image(os.path.join(OUTPUT_DIR, filename))
-
-def univariate_analysis(df):
-    """Perform univariate analysis for numerical and categorical columns."""
-    
-    # Convert Polars DataFrame to Pandas
+def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
     df_pandas = df.to_pandas()
-    print_section_header("Performing Graphical Data Analysis")
-
-    print("\n=== Univariate Analysis ===")
-
-
-    # Select numerical and categorical columns
     num_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
     cat_cols = df.select(pl.col(pl.Utf8)).columns
 
-    print("Plotting all the numerical column using Histogram")
+    figures_univariate, figures_bivariate, figures_multivariate = [], [], []
 
-    # Subplots for numerical columns
-    fig_num = make_subplots(rows=len(num_cols), cols=1, subplot_titles=[f"Histogram of {col}" for col in num_cols])
-    for i, col in enumerate(num_cols):
-        fig = px.histogram(df_pandas, x=col, nbins=30)
-        for trace in fig.data:
-            fig_num.add_trace(trace, row=i+1, col=1)
-    fig_num.update_layout(title="Univariate Analysis - Numerical", height=300 * len(num_cols))
-    save_plot(fig_num, "univariate_numerical.png")
+    kpi_html = '<div class="kpi-container">'
+    for col in num_cols[:4]:
+        total = df[col].sum()
+        kpi_html += f'''
+        <div class="kpi-box">
+            <h3>{round(total, 2):,}</h3>
+            <p>Total {col}</p>
+        </div>
+        '''
+    kpi_html += '</div>'
 
-    # Subplots for categorical columns
-    print("Plotting all the categorical column using barplot")
-
-    fig_cat = make_subplots(rows=len(cat_cols), cols=1, subplot_titles=[f"Category Distribution of {col}" for col in cat_cols])
-    for i, col in enumerate(cat_cols):
+    for col in cat_cols:
         value_counts = df_pandas[col].value_counts().reset_index()
-        value_counts.columns = [col, "count"]  # Rename columns explicitly
-        fig = px.bar(value_counts, x=col, y="count")
-        for trace in fig.data:
-            fig_cat.add_trace(trace, row=i+1, col=1)
-    fig_cat.update_layout(title="Univariate Analysis - Categorical", height=300 * len(cat_cols))
-    save_plot(fig_cat, "univariate_categorical.png")
+        value_counts.columns = [col, "count"]
+        fig = px.bar(value_counts, x=col, y="count", title=f"{col} Distribution", color_discrete_sequence=["#00BFFF"])
+        fig.update_layout(template='plotly_dark', bargap=0.4)
+        figures_univariate.append(fig)
 
-import itertools
+    for col in num_cols:
+        fig1 = px.histogram(df_pandas, x=col, title=f"Histogram of {col}", color_discrete_sequence=["#FFA500"])
+        fig1.update_layout(template='plotly_dark', bargap=0.4)
+        figures_univariate.append(fig1)
 
-def bivariate_analysis(df):
-    """Perform bivariate analysis for all numerical and categorical column combinations."""
-    
-    df_pandas = df.to_pandas()
-    num_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
-    cat_cols = df.select(pl.col(pl.Utf8)).columns
+        fig2 = px.box(df_pandas, y=col, title=f"Boxplot of {col}", color_discrete_sequence=["#7CFC00"])
+        fig2.update_layout(template='plotly_dark')
+        figures_univariate.append(fig2)
 
-    print("\n=== Bivariate Analysis ===")
+    for i in range(len(num_cols)):
+        for j in range(i + 1, len(num_cols)):
+            fig = px.scatter(df_pandas, x=num_cols[i], y=num_cols[j], title=f"{num_cols[i]} vs {num_cols[j]}", color_discrete_sequence=["#FF69B4"])
+            fig.update_layout(template='plotly_dark')
+            figures_bivariate.append(fig)
 
-    # Scatter Plots for All Pairs of Numerical Columns
-    print("Plotting scatter plot for All Pairs of Numerical Columns")
+    for cat in cat_cols:
+        for num in num_cols:
+            fig = px.histogram(df_pandas, x=num, color=cat, barmode='stack', title=f"{num} by {cat}")
+            fig.update_layout(template='plotly_dark', bargap=0.4)
+            figures_bivariate.append(fig)
 
-    num_combinations = list(itertools.combinations(num_cols, 2))
-    if num_combinations:
-        fig_scatter = make_subplots(rows=len(num_combinations), cols=1, 
-                                    subplot_titles=[f"Scatter: {x} vs {y}" for x, y in num_combinations])
-        for i, (x, y) in enumerate(num_combinations):
-            #print(f"Generating Scatter Plot for: {x} vs {y}")
-            fig = px.scatter(df_pandas, x=x, y=y)
+    for i in range(len(cat_cols)):
+        for j in range(i + 1, len(cat_cols)):
+            grouped_data = df_pandas.groupby([cat_cols[i], cat_cols[j]]).size().reset_index(name='count')
+            fig = px.bar(grouped_data, x=cat_cols[i], y='count', color=cat_cols[j], barmode='stack',
+                         title=f"{cat_cols[i]} vs {cat_cols[j]}")
+            fig.update_layout(template='plotly_dark', bargap=0.4)
+            figures_bivariate.append(fig)
+
+    if len(num_cols) > 1:
+        corr_matrix = df_pandas[num_cols].corr()
+        fig = go.Figure(data=go.Heatmap(z=corr_matrix.values, x=corr_matrix.columns,
+                                        y=corr_matrix.index, colorscale='Blues', zmin=-1, zmax=1))
+        fig.update_layout(title="Correlation Heatmap", template='plotly_dark')
+        figures_multivariate.append(fig)
+
+    if background_image_path:
+        with open(background_image_path, "rb") as image_file:
+            encoded_image = base64.b64encode(image_file.read()).decode()
+        body_background = f'background-image: url("data:image/png;base64,{encoded_image}"); background-size: cover; background-position: center;'
+    else:
+        body_background = "background-color: #1e1e1e;"
+
+
+    def create_subplot(figures, title):
+        if not figures:
+            return "<p>No plots available.</p>"
+
+        cols = 3  # Fixed to 3 plots per row
+        rows = math.ceil(len(figures) / cols)
+        safe_spacing = min(0.05, 1 / (rows - 1)) if rows > 1 else 0.05
+
+        subplot_fig = make_subplots(
+            rows=rows, 
+            cols=cols,
+            subplot_titles=[fig.layout.title.text for fig in figures],
+            vertical_spacing=safe_spacing
+        )
+
+        for i, fig in enumerate(figures):
             for trace in fig.data:
-                fig_scatter.add_trace(trace, row=i+1, col=1)
-        fig_scatter.update_layout(title="Bivariate Analysis - Scatter Plots", height=400 * len(num_combinations))
-        save_plot(fig_scatter, "bivariate_scatter_all.png")
+                row = (i // cols) + 1
+                col = (i % cols) + 1
+                subplot_fig.add_trace(trace, row=row, col=col)
 
-    # Histograms for All Numerical vs Categorical Combinations
-    print("Plotting Histograms for All Numerical vs Categorical Combinations")
+        # Dynamic height: 400px per row (you can adjust 400 to your preference)
+        height = 400 * rows
 
-    num_cat_combinations = list(itertools.product(num_cols, cat_cols))
-    if num_cat_combinations:
-        fig_hist = make_subplots(rows=len(num_cat_combinations), cols=1,
-                                 subplot_titles=[f"Histogram: {num} by {cat}" for num, cat in num_cat_combinations])
-        for i, (num, cat) in enumerate(num_cat_combinations):
-            #print(f"Generating Histogram for: {num} grouped by {cat}")
-            fig = px.histogram(df_pandas, x=num, color=cat)
+        subplot_fig.update_layout(
+            title_text=title, 
+            height=height, 
+            width=1500, 
+            showlegend=False, 
+            template='plotly_dark'
+        )
+        return subplot_fig.to_html(full_html=False)
+
+
+    def create_bivariate_subplot(figures, title):
+        if not figures:
+            return "<p>No plots available.</p>"
+
+        cols = 3
+        rows = math.ceil(len(figures) / cols)
+
+        # Reduce vertical spacing between rows
+        vertical_spacing = 0.03  # try 0.03 or even 0.02
+
+        subplot_fig = make_subplots(
+            rows=rows,
+            cols=cols,
+            subplot_titles=[fig.layout.title.text for fig in figures],
+            vertical_spacing=vertical_spacing,
+            horizontal_spacing=0.05
+        )
+
+        for i, fig in enumerate(figures):
+            row = (i // cols) + 1
+            col = (i % cols) + 1
             for trace in fig.data:
-                fig_hist.add_trace(trace, row=i+1, col=1)
-        fig_hist.update_layout(title="Bivariate Analysis - Numerical vs Categorical", height=400 * len(num_cat_combinations))
-        save_plot(fig_hist, "bivariate_num_vs_cat_all.png")
+                subplot_fig.add_trace(trace, row=row, col=col)
 
-    # Stacked Bar Plots for All Categorical Combinations
-    print("Plotting Stacked Bar Plots for All Categorical Combinations")
+        base_height_per_row = 400  # reasonable height per row
+        extra_height_padding = 100  # space for title/margin
 
-    cat_combinations = list(itertools.combinations(cat_cols, 2))
-    if cat_combinations:
-        fig_bar = make_subplots(rows=len(cat_combinations), cols=1,
-                                subplot_titles=[f"Stacked Bar: {x} vs {y}" for x, y in cat_combinations])
-        for i, (x, y) in enumerate(cat_combinations):
-            #print(f"Generating Stacked Bar Plot for: {x} vs {y}")
-            fig = px.bar(df_pandas, x=x, color=y)
-            for trace in fig.data:
-                fig_bar.add_trace(trace, row=i+1, col=1)
-        fig_bar.update_layout(title="Bivariate Analysis - Categorical", height=400 * len(cat_combinations))
-        save_plot(fig_bar, "bivariate_cat_vs_cat_all.png")
+        height = base_height_per_row * rows + extra_height_padding
 
-def multivariate_analysis(df):
-    """Perform multivariate analysis using correlation heatmap."""
-    print("\n=== Multivariate Analysis ===")
-    
-    df_pandas = df.to_pandas()
-    num_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
-    corr_matrix = df_pandas[num_cols].corr()
+        subplot_fig.update_layout(
+            title_text=title,
+            height=height,
+            width=1500,
+            showlegend=False,
+            template='plotly_dark',
+            margin=dict(l=40, r=40, t=80, b=40)
+        )
 
-    print("Plotting correlation matrix ")
-    fig_corr = make_subplots(rows=1, cols=1, subplot_titles=["Correlation Heatmap"])
-    heatmap = go.Heatmap(z=corr_matrix.values, x=corr_matrix.columns, y=corr_matrix.index, colorscale='Blues', zmin=-1, zmax=1)
-    fig_corr.add_trace(heatmap)
-    fig_corr.update_layout(title="Multivariate Analysis - Correlation Matrix", height=600, width=800)
+        return subplot_fig.to_html(full_html=False)
 
-    save_plot(fig_corr, "multivariate_correlation.png")
 
-import polars as pl
-import json
+    def create_single_plot(figures, title):
+        if not figures:
+            return "<p>No plots available.</p>"
+
+        # Take only the first figure, assuming only one for bivariate/multivariate
+        fig = figures[0]
+
+        fig.update_layout(
+            title_text=title,
+            height=600,
+            width=800,
+            showlegend=True,
+            template='plotly_dark',
+            margin=dict(l=80, r=40, t=80, b=40)
+        )
+
+        return fig.to_html(full_html=False)
+
+
+    html_content = f"""
+    <html>
+    <head>
+        <title>PowerBI Styled EDA Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <style>
+            body {{
+                font-family: Segoe UI, sans-serif;
+                margin: 0;
+                padding: 0;
+                {body_background}
+                color: white;
+            }}
+            h1 {{
+                color: #FFFFFF;
+                text-align: center;
+                padding-top: 20px;
+                text-shadow: 1px 1px 2px #000;
+            }}
+            .navbar {{
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                background-color: rgba(0,0,0,0.7);
+                padding: 10px 0;
+                position: sticky;
+                top: 0;
+                z-index: 1000;
+            }}
+            .navbar button {{
+                background-color: #00BFFF;
+                border: none;
+                color: white;
+                padding: 10px 20px;
+                margin: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                border-radius: 5px;
+                transition: background-color 0.3s;
+            }}
+            .navbar button:hover {{
+                background-color: #009ACD;
+            }}
+            .section {{
+                display: none;
+                padding: 20px;
+            }}
+            .active {{
+                display: block;
+            }}
+            .kpi-container {{
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 10px;
+                padding: 0 20px;
+            }}
+            .kpi-box {{
+                background-color: rgba(0,0,0,0.6);
+                padding: 20px;
+                border-radius: 10px;
+                width: 200px;
+                text-align: center;
+                box-shadow: 0 0 10px #333;
+            }}
+            .kpi-box h3 {{
+                font-size: 28px;
+                margin: 0;
+                color: #00FFFF;
+            }}
+            .kpi-box p {{
+                font-size: 16px;
+                margin: 5px 0 0 0;
+                color: #CCCCCC;
+            }}
+            .user-input {{
+                text-align: center;
+                padding: 20px;
+            }}
+            .user-input input {{
+                padding: 10px;
+                font-size: 16px;
+                border-radius: 5px;
+                width: 250px;
+                margin-right: 10px;
+            }}
+            .user-input button {{
+                padding: 10px 20px;
+                font-size: 16px;
+                background-color: #00BFFF;
+                border: none;
+                border-radius: 5px;
+                color: white;
+                cursor: pointer;
+            }}
+            .user-charts {{
+                margin-top: 20px;
+            }}
+        </style>
+        <script>
+            function showSection(sectionId) {{
+                var sections = document.getElementsByClassName('section');
+                for (var i = 0; i < sections.length; i++) {{
+                    sections[i].classList.remove('active');
+                }}
+                document.getElementById(sectionId).classList.add('active');
+            }}
+
+            function generatePieChart(columnName) {{
+                const data = JSON.parse(document.getElementById('data-json').textContent);
+                if (!data.hasOwnProperty(columnName)) {{
+                    alert('Invalid column name!');
+                    return;
+                }}
+                const values = data[columnName];
+                const counts = values.reduce((acc, val) => {{
+                    acc[val] = (acc[val] || 0) + 1;
+                    return acc;
+                }}, {{}});
+
+                const labels = Object.keys(counts);
+                const vals = Object.values(counts);
+
+                const pieData = [{{
+                    type: 'pie',
+                    labels: labels,
+                    values: vals
+                }}];
+
+                const layout = {{
+                    title: 'Pie Chart of ' + columnName,
+                    paper_bgcolor: 'rgba(0,0,0,0.5)',
+                    font: {{ color: 'white' }}
+                }};
+
+                const divId = 'pie_' + columnName + '_' + Math.floor(Math.random() * 100000);
+                const chartDiv = document.createElement('div');
+                chartDiv.id = divId;
+                chartDiv.style.marginTop = '30px';
+                document.getElementById('user-charts').appendChild(chartDiv);
+                Plotly.newPlot(divId, pieData, layout);
+            }}
+
+            window.onload = function() {{
+                showSection('univariate');
+            }};
+        </script>
+    </head>
+    <body>
+        <h1>Power BI Styled EDA Dashboard</h1>
+
+        {kpi_html}
+
+        <div class="navbar">
+            <button onclick="showSection('univariate')">Univariate</button>
+            <button onclick="showSection('bivariate')">Bivariate</button>
+            <button onclick="showSection('multivariate')">Multivariate</button>
+        </div>
+
+        <div id="univariate" class="section">
+            <h2>Univariate Analysis</h2>
+            {create_subplot(figures_univariate, "Univariate Analysis")}
+        </div>
+
+        <div id="bivariate" class="section">
+            <h2>Bivariate Analysis</h2>
+            {create_bivariate_subplot(figures_bivariate, "Bivariate Analysis")}
+        </div>
+
+        <div id="multivariate" class="section">
+            <h2>Multivariate Analysis</h2>
+            {create_single_plot(figures_multivariate, "Multivariate Analysis")}
+        </div>
+
+        
+       
+    </body>
+    </html>
+    """
+
+    save_dashboard(html_content)
+
+
+
+
 
 def fix_json_columns(df: pl.DataFrame) -> pl.DataFrame:
     """Detect and fix JSON-type columns in the Polars DataFrame."""
     print_section_header("Checking and fixing json types of columns")
 
-    print("Detecting and fixing json types of columns")
+    print("Detecting and fixing json types of columns if there are any")
     new_columns = []
 
     for col in df.columns:
@@ -890,31 +1147,99 @@ def fix_json_columns(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def clean_data(df):
+
+def detect_and_mask_pii_polars(df: pl.DataFrame, sample_size: int = 10) -> pl.DataFrame:
+    """
+    Detects and masks PII in a Polars DataFrame.
+
+    Args:
+        df (pl.DataFrame): Input Polars DataFrame.
+        sample_size (int): Number of rows to sample for PII detection.
+
+    Returns:
+        pl.DataFrame: DataFrame with masked PII columns added.
+    """
+    print_section_header("Checking for any PII types in columns and masking them")
+
+    analyzer = AnalyzerEngine()
+    anonymizer = AnonymizerEngine()
+    pii_columns: Dict[str, List[str]] = {}
+
+    # Step 1: Detect PII columns using sampling
+    for col in df.columns:
+        col_data = df[col].drop_nulls().cast(str)
+        if len(col_data) == 0:
+            continue
+        sample = col_data.sample(min(sample_size, len(col_data)), seed=42)
+        detected_types = set()
+
+        for value in sample.to_list():
+            results = analyzer.analyze(text=value, language='en')
+            for r in results:
+                detected_types.add(r.entity_type)
+
+        if detected_types:
+            pii_columns[col] = list(detected_types)
+
+    # Print detected columns info or message if none found
+    if pii_columns:
+        print("Detected PII types in columns:")
+        for col, types in pii_columns.items():
+            print(f" - Column '{col}': {types}")
+    else:
+        print("No PII columns detected in the dataset.")
+
+    # Step 2: Mask PII in detected columns
+    df_dict = df.to_dict(as_series=False)  # Convert to dict for easy row-wise updates
+
+    for col in pii_columns:
+        masked_values = []
+        for text in df_dict[col]:
+            text = str(text) if text is not None else ""
+            results = analyzer.analyze(text=text, language='en')
+            if results:
+                masked = anonymizer.anonymize(text=text, analyzer_results=results).text
+                masked_values.append(masked)
+            else:
+                masked_values.append(text)
+
+        df_dict[f"{col}_masked"] = masked_values
+
+    return pl.DataFrame(df_dict)
+
+
+
+def clean_data(df, background_image_path=None):
     """Main function to clean the data."""
-    df=detect_column_types_and_process_text(df)
+    df = detect_column_types_and_process_text(df)
     df = handle_negative_values(df)
     df = replace_symbols_and_convert_to_float(df)
     df = fix_spelling_errors_in_columns(df)
     df = fix_spelling_errors_in_categorical(df)
-    
+    df = replace_symbols(df)
+
     df = handle_missing_values(df)
     df = handle_duplicates(df)
     check_cardinality(df)
-    save_boxplots(df)
-    
+
     # df = remove_outliers(df)
     df = fix_skewness(df)
-    df=check_multicollinearity(df)
-    print_section_header("Enter target column")
-    target_col = input("Enter the target column: ")
-    df=check_and_handle_imbalance(df,target_col)
-    univariate_analysis(df)
-    bivariate_analysis(df)
-    multivariate_analysis(df)
-    df=fix_json_columns(df)
+    df = check_multicollinearity(df)
 
+    print_section_header("Enter target column (or press Enter to skip)")
+    target_col = input("Enter the target column: ").strip()
+    
+    if target_col:
+        if target_col in df.columns:
+            df = check_and_handle_imbalance(df, target_col)
+        else:
+            print(f"⚠️ Warning: '{target_col}' not found in columns. Skipping imbalance handling.")
+    else:
+        print("ℹ️ Skipping target column–based imbalance check.")
 
-    df=save_cleaned_data(df)
-    return df 
+    generate_dashboard(df, background_image_path=background_image_path)
 
+    df = fix_json_columns(df)
+    masked_df = detect_and_mask_pii_polars(df)
+    df = save_cleaned_data(masked_df)
+    return df
