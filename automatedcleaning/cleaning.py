@@ -760,357 +760,234 @@ def save_dashboard(html_content, filename="dashboard.html"):
         f.write(html_content)
 
 def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
+    """Render an interactive, enterprise-style EDA dashboard.
+
+    Writes ``output/eda/dashboard.html`` with a collapsible left sidebar
+    (Overview / Univariate / Bivariate / Multivariate), a top bar with a
+    hamburger toggle, KPI cards, a data preview and responsive Plotly
+    chart-card grids. Charts are lazy-rendered per section so the page loads
+    instantly even with many plots.
+    """
     if df is None:
         raise ValueError(
             "generate_dashboard received None. Pass a DataFrame, e.g. the value "
             "returned by clean_data(df) or load it with load_data('cleaned_data.csv')."
         )
+
     df_pandas = df.to_pandas()
     num_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
     cat_cols = df.select(pl.col(pl.Utf8)).columns
+    PALETTE = ["#3b82f6", "#22d3ee", "#a78bfa", "#f472b6", "#fbbf24", "#34d399", "#f87171"]
 
+    chart_json = []  # (cid, section, plotly_json_str)
+
+    def _register(fig, section, tall=False):
+        fig.update_layout(
+            template="plotly_dark", autosize=True,
+            margin=dict(l=48, r=20, t=52, b=42),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#cbd5e1", size=12),
+            title=dict(font=dict(size=14, color="#e5e7eb")),
+            colorway=PALETTE, legend=dict(bgcolor="rgba(0,0,0,0)"),
+            xaxis=dict(gridcolor="rgba(148,163,184,0.12)"),
+            yaxis=dict(gridcolor="rgba(148,163,184,0.12)"),
+        )
+        cid = "c%d" % len(chart_json)
+        chart_json.append((cid, section, fig.to_json()))
+        return '<div class="card"><div id="%s" class="plot%s"></div></div>' % (
+            cid, " tall" if tall else "")
+
+    def _grid(figs, section, single=False, tall=False):
+        if not figs:
+            return '<p class="empty">No charts available for this section.</p>'
+        cls = "chart-grid single" if single else "chart-grid"
+        return '<div class="%s">%s</div>' % (
+            cls, "".join(_register(f, section, tall) for f in figs))
+
+    # ---- build figures -------------------------------------------------------
     figures_univariate, figures_bivariate, figures_multivariate = [], [], []
-
-    kpi_html = '<div class="kpi-container">'
-    for col in num_cols[:4]:
-        total = df[col].sum()
-        kpi_html += f'''
-        <div class="kpi-box">
-            <h3>{round(total, 2):,}</h3>
-            <p>Total {col}</p>
-        </div>
-        '''
-    kpi_html += '</div>'
+    MAX_SCATTER, MAX_BICAT = 24, 24
 
     for col in cat_cols:
-        value_counts = df_pandas[col].value_counts().reset_index()
-        value_counts.columns = [col, "count"]
-        fig = px.bar(value_counts, x=col, y="count", title=f"{col} Distribution", color_discrete_sequence=["#00BFFF"])
-        fig.update_layout(template='plotly_dark', bargap=0.4)
-        figures_univariate.append(fig)
-
+        vc = df_pandas[col].value_counts().reset_index()
+        vc.columns = [col, "count"]
+        figures_univariate.append(px.bar(vc.head(20), x=col, y="count",
+                                         title=f"{col} — distribution"))
     for col in num_cols:
-        fig1 = px.histogram(df_pandas, x=col, title=f"Histogram of {col}", color_discrete_sequence=["#FFA500"])
-        fig1.update_layout(template='plotly_dark', bargap=0.4)
-        figures_univariate.append(fig1)
-
-        fig2 = px.box(df_pandas, y=col, title=f"Boxplot of {col}", color_discrete_sequence=["#7CFC00"])
-        fig2.update_layout(template='plotly_dark')
-        figures_univariate.append(fig2)
+        figures_univariate.append(px.histogram(df_pandas, x=col, title=f"{col} — histogram"))
+        figures_univariate.append(px.box(df_pandas, y=col, title=f"{col} — box plot"))
 
     for i in range(len(num_cols)):
         for j in range(i + 1, len(num_cols)):
-            fig = px.scatter(df_pandas, x=num_cols[i], y=num_cols[j], title=f"{num_cols[i]} vs {num_cols[j]}", color_discrete_sequence=["#FF69B4"])
-            fig.update_layout(template='plotly_dark')
-            figures_bivariate.append(fig)
-
-    for cat in cat_cols:
+            if len(figures_bivariate) >= MAX_SCATTER:
+                break
+            figures_bivariate.append(px.scatter(df_pandas, x=num_cols[i], y=num_cols[j],
+                                                title=f"{num_cols[i]} vs {num_cols[j]}"))
+    low_card = [c for c in cat_cols if df[c].n_unique() <= 12]
+    bicat = 0
+    for cat in low_card:
         for num in num_cols:
-            fig = px.histogram(df_pandas, x=num, color=cat, barmode='stack', title=f"{num} by {cat}")
-            fig.update_layout(template='plotly_dark', bargap=0.4)
-            figures_bivariate.append(fig)
-
-    for i in range(len(cat_cols)):
-        for j in range(i + 1, len(cat_cols)):
-            grouped_data = df_pandas.groupby([cat_cols[i], cat_cols[j]]).size().reset_index(name='count')
-            fig = px.bar(grouped_data, x=cat_cols[i], y='count', color=cat_cols[j], barmode='stack',
-                         title=f"{cat_cols[i]} vs {cat_cols[j]}")
-            fig.update_layout(template='plotly_dark', bargap=0.4)
-            figures_bivariate.append(fig)
+            if bicat >= MAX_BICAT:
+                break
+            figures_bivariate.append(px.histogram(df_pandas, x=num, color=cat, barmode="overlay",
+                                                  title=f"{num} by {cat}"))
+            bicat += 1
 
     if len(num_cols) > 1:
-        corr_matrix = df_pandas[num_cols].corr()
-        fig = go.Figure(data=go.Heatmap(z=corr_matrix.values, x=corr_matrix.columns,
-                                        y=corr_matrix.index, colorscale='Blues', zmin=-1, zmax=1))
-        fig.update_layout(title="Correlation Heatmap", template='plotly_dark')
-        figures_multivariate.append(fig)
+        corr = df_pandas[num_cols].corr()
+        hm = go.Figure(data=go.Heatmap(
+            z=corr.values, x=list(corr.columns), y=list(corr.index),
+            colorscale="RdBu", zmid=0, zmin=-1, zmax=1,
+            text=corr.round(2).values, texttemplate="%{text}",
+            hovertemplate="%{x} vs %{y}: %{z:.2f}<extra></extra>"))
+        hm.update_layout(title="Correlation heatmap")
+        figures_multivariate.append(hm)
 
+    # ---- KPIs & preview ------------------------------------------------------
+    total_cells = (df.height * df.width) or 1
+    missing_cells = sum(df[c].null_count() for c in df.columns)
+    try:
+        dup_rows = int(df.is_duplicated().sum())
+    except Exception:
+        dup_rows = 0
+    kpis = [
+        ("Rows", f"{df.height:,}"), ("Columns", f"{df.width:,}"),
+        ("Numeric", f"{len(num_cols)}"), ("Categorical", f"{len(cat_cols)}"),
+        ("Missing", f"{missing_cells / total_cells:.1%}"), ("Duplicates", f"{dup_rows:,}"),
+    ]
+    kpi_html = "".join(
+        '<div class="kpi"><div class="kpi-val">' + v + '</div><div class="kpi-lbl">' + k + '</div></div>'
+        for k, v in kpis)
+    preview_html = df_pandas.head(8).to_html(index=False, border=0, classes="preview")
+
+    overview_body = (
+        '<div class="kpi-row">' + kpi_html + '</div>'
+        '<div class="panel"><h3>Data preview <span>(first 8 rows)</span></h3>'
+        '<div class="table-wrap">' + preview_html + '</div></div>')
+    uni_body = _grid(figures_univariate, "univariate")
+    bi_body = _grid(figures_bivariate, "bivariate")
+    multi_body = _grid(figures_multivariate, "multivariate", single=True, tall=True)
+
+    topbar_bg = ""
     if background_image_path:
-        with open(background_image_path, "rb") as image_file:
-            encoded_image = base64.b64encode(image_file.read()).decode()
-        body_background = f'background-image: url("data:image/png;base64,{encoded_image}"); background-size: cover; background-position: center;'
-    else:
-        body_background = "background-color: #1e1e1e;"
+        try:
+            with open(background_image_path, "rb") as fh:
+                enc = base64.b64encode(fh.read()).decode()
+            topbar_bg = ("background-image:linear-gradient(rgba(18,21,29,.85),rgba(18,21,29,.85)),"
+                         "url('data:image/png;base64," + enc + "');background-size:cover;")
+        except Exception:
+            topbar_bg = ""
 
+    specs_js = "{" + ",".join('"%s":%s' % (cid, js) for cid, _, js in chart_json) + "}"
+    secmap_js = "{" + ",".join('"%s":"%s"' % (cid, sec) for cid, sec, _ in chart_json) + "}"
 
-    def create_subplot(figures, title):
-        if not figures:
-            return "<p>No plots available.</p>"
+    css = """
+:root{--bg:#0f1116;--panel:#161a22;--card:#1a1f2b;--border:#232a37;--text:#e5e7eb;--muted:#9aa4b2;--accent:#3b82f6;}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Segoe UI',system-ui,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+.app{display:flex;min-height:100vh;}
+.sidebar{width:232px;background:#12151d;border-right:1px solid var(--border);padding:18px 12px;transition:width .22s ease;overflow:hidden;position:sticky;top:0;height:100vh;}
+.app.collapsed .sidebar{width:66px;}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 20px;font-weight:700;font-size:18px;white-space:nowrap;}
+.brand .logo{color:var(--accent);font-size:20px;}
+.app.collapsed .brand-name{display:none;}
+nav{display:flex;flex-direction:column;gap:4px;}
+.nav-item{display:flex;align-items:center;gap:13px;padding:11px 12px;border-radius:10px;color:var(--muted);cursor:pointer;text-decoration:none;font-size:14px;white-space:nowrap;transition:background .15s,color .15s;}
+.nav-item:hover{background:#1b2230;color:var(--text);}
+.nav-item.active{background:var(--accent);color:#fff;}
+.nav-item .ico{width:18px;text-align:center;font-size:15px;flex:none;}
+.app.collapsed .nav-item .txt{display:none;}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.topbar{display:flex;align-items:center;gap:16px;padding:16px 24px;border-bottom:1px solid var(--border);background:#12151d;position:sticky;top:0;z-index:10;}
+.toggle{background:#1b2230;border:1px solid var(--border);color:var(--text);width:40px;height:40px;border-radius:10px;font-size:18px;cursor:pointer;flex:none;}
+.toggle:hover{background:#232c3d;}
+.title{font-size:18px;font-weight:700;}
+.subtitle{font-size:13px;color:var(--muted);margin-top:2px;}
+.content{padding:22px 24px;max-width:1600px;}
+.section{display:none;}
+.section.active{display:block;animation:fade .25s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h2{font-size:19px;margin:2px 0 18px;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:22px;}
+.kpi{background:linear-gradient(160deg,#1b2230,#161a22);border:1px solid var(--border);border-radius:14px;padding:18px;}
+.kpi-val{font-size:26px;font-weight:700;color:#fff;}
+.kpi-lbl{font-size:12px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.05em;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;}
+.panel h3{margin:0 0 14px;font-size:15px;}
+.panel h3 span{color:var(--muted);font-weight:400;font-size:13px;}
+.table-wrap{overflow-x:auto;}
+table.preview{border-collapse:collapse;width:100%;font-size:13px;}
+table.preview th{background:#1b2230;color:#cbd5e1;text-align:left;padding:9px 12px;position:sticky;top:0;}
+table.preview td{padding:8px 12px;border-top:1px solid var(--border);color:#c7cdd8;white-space:nowrap;}
+table.preview tr:hover td{background:#171c26;}
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:16px;}
+.chart-grid.single{grid-template-columns:1fr;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s,box-shadow .15s;}
+.card:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.35);}
+.plot{height:360px;width:100%;}
+.plot.tall{height:560px;}
+.empty{color:var(--muted);padding:44px;text-align:center;border:1px dashed var(--border);border-radius:14px;}
+@media(max-width:760px){.sidebar{position:fixed;z-index:60;left:0;}.app.collapsed .sidebar{width:0;padding:0;border:none;}.content{padding:16px;}}
+"""
 
-        cols = 3  # Fixed to 3 plots per row
-        rows = math.ceil(len(figures) / cols)
-        safe_spacing = min(0.05, 1 / (rows - 1)) if rows > 1 else 0.05
+    js = """
+var SPECS=__SPECS__, SECMAP=__SECMAP__, RENDERED={};
+function renderSection(sec){
+  Object.keys(SECMAP).forEach(function(cid){
+    if(SECMAP[cid]===sec && !RENDERED[cid] && document.getElementById(cid)){
+      var s=SPECS[cid];
+      Plotly.newPlot(cid, s.data, s.layout, {responsive:true, displayModeBar:false});
+      RENDERED[cid]=1;
+    }
+  });
+}
+function showSection(id, el){
+  var s=document.querySelectorAll('.section');for(var i=0;i<s.length;i++){s[i].classList.remove('active');}
+  document.getElementById(id).classList.add('active');
+  var n=document.querySelectorAll('.nav-item');for(var j=0;j<n.length;j++){n[j].classList.remove('active');}
+  if(el){el.classList.add('active');}
+  renderSection(id);
+  setTimeout(function(){window.dispatchEvent(new Event('resize'));},80);
+}
+function toggleSidebar(){
+  document.getElementById('app').classList.toggle('collapsed');
+  setTimeout(function(){window.dispatchEvent(new Event('resize'));},240);
+}
+window.addEventListener('load', function(){ renderSection('overview'); });
+"""
+    js = js.replace("__SPECS__", specs_js).replace("__SECMAP__", secmap_js)
 
-        subplot_fig = make_subplots(
-            rows=rows, 
-            cols=cols,
-            subplot_titles=[fig.layout.title.text for fig in figures],
-            vertical_spacing=safe_spacing
-        )
+    nav = (
+        "<a class='nav-item active' onclick=\"showSection('overview',this)\"><span class='ico'>▦</span><span class='txt'>Overview</span></a>"
+        "<a class='nav-item' onclick=\"showSection('univariate',this)\"><span class='ico'>▮</span><span class='txt'>Univariate</span></a>"
+        "<a class='nav-item' onclick=\"showSection('bivariate',this)\"><span class='ico'>◫</span><span class='txt'>Bivariate</span></a>"
+        "<a class='nav-item' onclick=\"showSection('multivariate',this)\"><span class='ico'>▩</span><span class='txt'>Multivariate</span></a>")
 
-        for i, fig in enumerate(figures):
-            for trace in fig.data:
-                row = (i // cols) + 1
-                col = (i % cols) + 1
-                subplot_fig.add_trace(trace, row=row, col=col)
-
-        # Dynamic height: 400px per row (you can adjust 400 to your preference)
-        height = 400 * rows
-
-        subplot_fig.update_layout(
-            title_text=title, 
-            height=height, 
-            width=1500, 
-            showlegend=False, 
-            template='plotly_dark'
-        )
-        return subplot_fig.to_html(full_html=False)
-
-
-    def create_bivariate_subplot(figures, title):
-        if not figures:
-            return "<p>No plots available.</p>"
-
-        cols = 3
-        rows = math.ceil(len(figures) / cols)
-
-        # Reduce vertical spacing between rows
-        vertical_spacing = 0.03  # try 0.03 or even 0.02
-
-        subplot_fig = make_subplots(
-            rows=rows,
-            cols=cols,
-            subplot_titles=[fig.layout.title.text for fig in figures],
-            vertical_spacing=vertical_spacing,
-            horizontal_spacing=0.05
-        )
-
-        for i, fig in enumerate(figures):
-            row = (i // cols) + 1
-            col = (i % cols) + 1
-            for trace in fig.data:
-                subplot_fig.add_trace(trace, row=row, col=col)
-
-        base_height_per_row = 400  # reasonable height per row
-        extra_height_padding = 100  # space for title/margin
-
-        height = base_height_per_row * rows + extra_height_padding
-
-        subplot_fig.update_layout(
-            title_text=title,
-            height=height,
-            width=1500,
-            showlegend=False,
-            template='plotly_dark',
-            margin=dict(l=40, r=40, t=80, b=40)
-        )
-
-        return subplot_fig.to_html(full_html=False)
-
-
-    def create_single_plot(figures, title):
-        if not figures:
-            return "<p>No plots available.</p>"
-
-        # Take only the first figure, assuming only one for bivariate/multivariate
-        fig = figures[0]
-
-        fig.update_layout(
-            title_text=title,
-            height=600,
-            width=800,
-            showlegend=True,
-            template='plotly_dark',
-            margin=dict(l=80, r=40, t=80, b=40)
-        )
-
-        return fig.to_html(full_html=False)
-
-
-    html_content = f"""
-    <html>
-    <head>
-        <title>PowerBI Styled EDA Dashboard</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-        <style>
-            body {{
-                font-family: Segoe UI, sans-serif;
-                margin: 0;
-                padding: 0;
-                {body_background}
-                color: white;
-            }}
-            h1 {{
-                color: #FFFFFF;
-                text-align: center;
-                padding-top: 20px;
-                text-shadow: 1px 1px 2px #000;
-            }}
-            .navbar {{
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
-                background-color: rgba(0,0,0,0.7);
-                padding: 10px 0;
-                position: sticky;
-                top: 0;
-                z-index: 1000;
-            }}
-            .navbar button {{
-                background-color: #00BFFF;
-                border: none;
-                color: white;
-                padding: 10px 20px;
-                margin: 5px;
-                cursor: pointer;
-                font-size: 16px;
-                border-radius: 5px;
-                transition: background-color 0.3s;
-            }}
-            .navbar button:hover {{
-                background-color: #009ACD;
-            }}
-            .section {{
-                display: none;
-                padding: 20px;
-            }}
-            .active {{
-                display: block;
-            }}
-            .kpi-container {{
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
-                gap: 10px;
-                padding: 0 20px;
-            }}
-            .kpi-box {{
-                background-color: rgba(0,0,0,0.6);
-                padding: 20px;
-                border-radius: 10px;
-                width: 200px;
-                text-align: center;
-                box-shadow: 0 0 10px #333;
-            }}
-            .kpi-box h3 {{
-                font-size: 28px;
-                margin: 0;
-                color: #00FFFF;
-            }}
-            .kpi-box p {{
-                font-size: 16px;
-                margin: 5px 0 0 0;
-                color: #CCCCCC;
-            }}
-            .user-input {{
-                text-align: center;
-                padding: 20px;
-            }}
-            .user-input input {{
-                padding: 10px;
-                font-size: 16px;
-                border-radius: 5px;
-                width: 250px;
-                margin-right: 10px;
-            }}
-            .user-input button {{
-                padding: 10px 20px;
-                font-size: 16px;
-                background-color: #00BFFF;
-                border: none;
-                border-radius: 5px;
-                color: white;
-                cursor: pointer;
-            }}
-            .user-charts {{
-                margin-top: 20px;
-            }}
-        </style>
-        <script>
-            function showSection(sectionId) {{
-                var sections = document.getElementsByClassName('section');
-                for (var i = 0; i < sections.length; i++) {{
-                    sections[i].classList.remove('active');
-                }}
-                document.getElementById(sectionId).classList.add('active');
-            }}
-
-            function generatePieChart(columnName) {{
-                const data = JSON.parse(document.getElementById('data-json').textContent);
-                if (!data.hasOwnProperty(columnName)) {{
-                    alert('Invalid column name!');
-                    return;
-                }}
-                const values = data[columnName];
-                const counts = values.reduce((acc, val) => {{
-                    acc[val] = (acc[val] || 0) + 1;
-                    return acc;
-                }}, {{}});
-
-                const labels = Object.keys(counts);
-                const vals = Object.values(counts);
-
-                const pieData = [{{
-                    type: 'pie',
-                    labels: labels,
-                    values: vals
-                }}];
-
-                const layout = {{
-                    title: 'Pie Chart of ' + columnName,
-                    paper_bgcolor: 'rgba(0,0,0,0.5)',
-                    font: {{ color: 'white' }}
-                }};
-
-                const divId = 'pie_' + columnName + '_' + Math.floor(Math.random() * 100000);
-                const chartDiv = document.createElement('div');
-                chartDiv.id = divId;
-                chartDiv.style.marginTop = '30px';
-                document.getElementById('user-charts').appendChild(chartDiv);
-                Plotly.newPlot(divId, pieData, layout);
-            }}
-
-            window.onload = function() {{
-                showSection('univariate');
-            }};
-        </script>
-    </head>
-    <body>
-        <h1>Power BI Styled EDA Dashboard</h1>
-
-        {kpi_html}
-
-        <div class="navbar">
-            <button onclick="showSection('univariate')">Univariate</button>
-            <button onclick="showSection('bivariate')">Bivariate</button>
-            <button onclick="showSection('multivariate')">Multivariate</button>
-        </div>
-
-        <div id="univariate" class="section">
-            <h2>Univariate Analysis</h2>
-            {create_subplot(figures_univariate, "Univariate Analysis")}
-        </div>
-
-        <div id="bivariate" class="section">
-            <h2>Bivariate Analysis</h2>
-            {create_bivariate_subplot(figures_bivariate, "Bivariate Analysis")}
-        </div>
-
-        <div id="multivariate" class="section">
-            <h2>Multivariate Analysis</h2>
-            {create_single_plot(figures_multivariate, "Multivariate Analysis")}
-        </div>
-
-        
-       
-    </body>
-    </html>
-    """
+    html_content = (
+        "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+        "<title>EDA Dashboard</title>"
+        "<script src='https://cdn.plot.ly/plotly-2.35.2.min.js'></script>"
+        "<style>" + css + "</style></head><body>"
+        "<div class='app' id='app'>"
+        "<aside class='sidebar' id='sidebar'>"
+        "<div class='brand'><span class='logo'>◧</span><span class='brand-name'>EDA&nbsp;Studio</span></div>"
+        "<nav>" + nav + "</nav></aside>"
+        "<div class='main'>"
+        "<header class='topbar' style='" + topbar_bg + "'>"
+        "<button class='toggle' onclick='toggleSidebar()' title='Toggle sidebar'>☰</button>"
+        "<div><div class='title'>Exploratory Data Analysis</div>"
+        "<div class='subtitle'>" + f"{df.height:,} rows &middot; {df.width:,} columns" + "</div></div>"
+        "</header>"
+        "<main class='content'>"
+        "<section id='overview' class='section active'>" + overview_body + "</section>"
+        "<section id='univariate' class='section'><h2>Univariate analysis</h2>" + uni_body + "</section>"
+        "<section id='bivariate' class='section'><h2>Bivariate analysis</h2>" + bi_body + "</section>"
+        "<section id='multivariate' class='section'><h2>Multivariate analysis</h2>" + multi_body + "</section>"
+        "</main></div></div>"
+        "<script>" + js + "</script></body></html>")
 
     save_dashboard(html_content)
-
-
 
 
 
