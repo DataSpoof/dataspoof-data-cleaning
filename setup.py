@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='AutomatedCleaning',
-    version='1.5',
+    version='1.5.1',
     packages=find_packages(),
     install_requires=[
         "absl-py==2.1.0",
@@ -134,7 +134,7 @@ setup(
     long_description_content_type="text/markdown",
     author='Abhishek Kumar Singh',
     author_email='dataspoof007@gmail.com',
-    url='https://github.com/DataSpoof/AutomatedCleaning',
+    url='https://github.com/DataSpoof/dataspoof-data-cleaning',
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',

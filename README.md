@@ -5,7 +5,7 @@
 outliers, spelling corrections, text cleaning, PII masking and more — while the CPU-heavy
 work runs in compiled Rust for speed and true (GIL-free) parallelism.
 
-![Logo](https://raw.githubusercontent.com/DataSpoof/AutomatedCleaning/main/images/logo2.png)
+![Logo](https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/images/logo.png)
 
 ---
 
@@ -81,8 +81,8 @@ Building from source requires the **Rust toolchain** (because the backend is com
 pip install maturin
 
 # 2. Clone and build
-git clone https://github.com/DataSpoof/AutomatedCleaning.git
-cd AutomatedCleaning
+git clone https://github.com/DataSpoof/dataspoof-data-cleaning.git
+cd dataspoof-data-cleaning
 
 # Build & install into the current environment
 pip install .
@@ -167,7 +167,7 @@ ac.preprocess_text("I can't wait!! Visit https://x.co @bob 😀 it's GR8")
 ## Building & contributing
 
 The project uses **maturin** as its build backend (`pyproject.toml`). See
-[BUILD.md](BUILD.md) for the full architecture and build/publish guide.
+[BUILD.md](https://github.com/DataSpoof/dataspoof-data-cleaning/blob/main/BUILD.md) for the full architecture and build/publish guide.
 
 ```
 Cargo.toml            # Rust crate config
