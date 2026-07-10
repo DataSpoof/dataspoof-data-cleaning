@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='AutomatedCleaning',
-    version='1.8.1',
+    version='1.9.0',
     packages=find_packages(),
     install_requires=[
         "absl-py==2.1.0",

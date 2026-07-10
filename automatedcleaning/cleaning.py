@@ -762,11 +762,11 @@ def save_dashboard(html_content, filename="dashboard.html"):
 def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
     """Render an interactive, enterprise-style EDA dashboard.
 
-    Writes ``output/eda/dashboard.html`` with a collapsible left sidebar
-    (Overview / Univariate / Bivariate / Multivariate), a hamburger toggle,
-    KPI cards, an interactive **data-quality** panel, a data preview and
-    responsive Plotly chart-card grids. Charts are lazy-rendered per section so
-    the page loads instantly even with many plots.
+    Writes ``output/eda/dashboard.html`` with a collapsible sidebar (Overview /
+    Univariate / Bivariate / Multivariate), a hamburger toggle, KPI cards, an
+    interactive data-quality panel, a data preview, and Plotly charts. The
+    Univariate tab has a column picker; the Bivariate tab has X / Y / Color
+    pickers that plot the chosen pair on demand. Charts lazy-render per section.
     """
     if df is None:
         raise ValueError(
@@ -777,17 +777,19 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
     df_pandas = df.to_pandas()
     num_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
     cat_cols = df.select(pl.col(pl.Utf8)).columns
+    all_cols = num_cols + cat_cols
     PALETTE = ["#3b82f6", "#22d3ee", "#a78bfa", "#f472b6", "#fbbf24", "#34d399", "#f87171"]
 
     def esc(s):
-        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace('"', "&quot;"))
 
     def f64(series):
         return [float(x) if x is not None else float("nan") for x in series.to_list()]
 
     chart_json = []  # (cid, section, plotly_json_str)
 
-    def _register(fig, section, tall=False):
+    def _register(fig, section, tall=False, col=None):
         fig.update_layout(
             template="plotly_dark", autosize=True,
             margin=dict(l=48, r=20, t=52, b=42),
@@ -800,45 +802,26 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
         )
         cid = "c%d" % len(chart_json)
         chart_json.append((cid, section, fig.to_json()))
-        return '<div class="card"><div id="%s" class="plot%s"></div></div>' % (
-            cid, " tall" if tall else "")
+        dc = (' data-col="%s"' % esc(col)) if col is not None else ""
+        return '<div class="card"%s><div id="%s" class="plot%s"></div></div>' % (
+            dc, cid, " tall" if tall else "")
 
-    def _grid(figs, section, single=False, tall=False):
-        if not figs:
-            return '<p class="empty">No charts available for this section.</p>'
-        cls = "chart-grid single" if single else "chart-grid"
-        return '<div class="%s">%s</div>' % (
-            cls, "".join(_register(f, section, tall) for f in figs))
-
-    # ---- build figures -------------------------------------------------------
-    figures_univariate, figures_bivariate, figures_multivariate = [], [], []
-    MAX_SCATTER, MAX_BICAT = 24, 24
-
+    # ---- univariate charts (one card per column, tagged for filtering) -------
+    uni_cards = []
     for col in cat_cols:
         vc = df_pandas[col].value_counts().reset_index()
         vc.columns = [col, "count"]
-        figures_univariate.append(px.bar(vc.head(20), x=col, y="count",
-                                         title=f"{col} — distribution"))
+        uni_cards.append(_register(px.bar(vc.head(20), x=col, y="count",
+                                          title=f"{col} — distribution"), "univariate", col=col))
     for col in num_cols:
-        figures_univariate.append(px.histogram(df_pandas, x=col, title=f"{col} — histogram"))
-        figures_univariate.append(px.box(df_pandas, y=col, title=f"{col} — box plot"))
+        uni_cards.append(_register(px.histogram(df_pandas, x=col, title=f"{col} — histogram"),
+                                   "univariate", col=col))
+        uni_cards.append(_register(px.box(df_pandas, y=col, title=f"{col} — box plot"),
+                                   "univariate", col=col))
+    uni_grid = '<div class="chart-grid" id="uni-grid">' + "".join(uni_cards) + '</div>'
 
-    for i in range(len(num_cols)):
-        for j in range(i + 1, len(num_cols)):
-            if len(figures_bivariate) >= MAX_SCATTER:
-                break
-            figures_bivariate.append(px.scatter(df_pandas, x=num_cols[i], y=num_cols[j],
-                                                title=f"{num_cols[i]} vs {num_cols[j]}"))
-    low_card = [c for c in cat_cols if df[c].n_unique() <= 12]
-    bicat = 0
-    for cat in low_card:
-        for num in num_cols:
-            if bicat >= MAX_BICAT:
-                break
-            figures_bivariate.append(px.histogram(df_pandas, x=num, color=cat, barmode="overlay",
-                                                  title=f"{num} by {cat}"))
-            bicat += 1
-
+    # ---- multivariate (correlation heatmap) ----------------------------------
+    figures_multivariate = []
     if len(num_cols) > 1:
         corr = df_pandas[num_cols].corr()
         hm = go.Figure(data=go.Heatmap(
@@ -848,6 +831,46 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
             hovertemplate="%{x} vs %{y}: %{z:.2f}<extra></extra>"))
         hm.update_layout(title="Correlation heatmap")
         figures_multivariate.append(hm)
+    multi_body = ('<div class="chart-grid single">'
+                  + "".join(_register(f, "multivariate", tall=True) for f in figures_multivariate)
+                  + '</div>') if figures_multivariate else \
+        '<p class="empty">Need at least two numeric columns for a correlation heatmap.</p>'
+
+    # ---- embedded data for on-demand bivariate plotting ----------------------
+    cap = 5000
+    sub = df_pandas.head(cap)
+    DATA = {}
+    for c in num_cols:
+        DATA[c] = [None if (v is None or (isinstance(v, float) and v != v)) else float(v)
+                   for v in sub[c].tolist()]
+    for c in cat_cols:
+        DATA[c] = [None if v is None else str(v) for v in sub[c].tolist()]
+    COLTYPES = {**{c: "num" for c in num_cols}, **{c: "cat" for c in cat_cols}}
+    data_js = json.dumps(DATA).replace("</", "<\\/")
+    coltypes_js = json.dumps(COLTYPES).replace("</", "<\\/")
+
+    def _opts(cols, selected=None):
+        return "".join('<option value="%s"%s>%s</option>'
+                       % (esc(c), " selected" if c == selected else "", esc(c)) for c in cols)
+
+    bi_x_default = num_cols[0] if num_cols else (all_cols[0] if all_cols else "")
+    bi_y_default = (num_cols[1] if len(num_cols) > 1 else
+                    (cat_cols[0] if cat_cols else (all_cols[0] if all_cols else "")))
+
+    uni_controls = (
+        '<div class="controls"><div class="ctrl"><label>Column</label>'
+        '<select id="uni-select" onchange="filterUni(this.value)">'
+        '<option value="__all__">All columns</option>' + _opts(all_cols) + '</select></div></div>')
+    uni_body = uni_controls + uni_grid
+
+    bi_body = (
+        '<div class="controls">'
+        '<div class="ctrl"><label>X axis</label><select id="bi-x">' + _opts(all_cols, bi_x_default) + '</select></div>'
+        '<div class="ctrl"><label>Y axis</label><select id="bi-y">' + _opts(all_cols, bi_y_default) + '</select></div>'
+        '<div class="ctrl"><label>Color / group</label><select id="bi-c">'
+        '<option value="__none__">None</option>' + _opts(cat_cols) + '</select></div>'
+        '<button class="btn" onclick="plotBi()">Plot</button></div>'
+        '<div class="card"><div id="bi-plot" class="plot tall"></div></div>')
 
     # ---- KPIs ----------------------------------------------------------------
     n = df.height or 1
@@ -867,8 +890,7 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
         for k, v in kpis)
 
     # ---- data-quality issue detection ---------------------------------------
-    issues = []  # (severity, title, metric, detail)
-
+    issues = []
     for c in df.columns:
         nc = df[c].null_count()
         if nc > 0:
@@ -876,23 +898,19 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
             sev = "high" if pct > 0.3 else ("medium" if pct > 0.05 else "low")
             issues.append((sev, f"Missing values · {c}", f"{pct:.1%}",
                            f"{nc:,} of {n:,} rows are null in “{c}”."))
-
     if dup_rows > 0:
         sev = "high" if dup_rows / n > 0.05 else "medium"
         issues.append((sev, "Duplicate rows", f"{dup_rows:,}",
                        f"{dup_rows:,} fully duplicated rows — consider dropping them."))
-
     for c in df.columns:
         if df[c].n_unique() <= 1:
             issues.append(("medium", f"Constant column · {c}", "1 value",
                            f"“{c}” has a single unique value and carries no information."))
-
     for c in df.columns:
         ratio = df[c].n_unique() / n
         if ratio > 0.95 and df.height > 10:
             issues.append(("low", f"Possible identifier · {c}", f"{ratio:.0%} unique",
                            f"“{c}” is nearly unique per row — likely an ID with no predictive value."))
-
     for c in num_cols:
         vals = [v for v in df[c].to_list() if v is not None]
         if len(vals) >= 8:
@@ -903,18 +921,15 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
                 sev = "high" if pct > 0.1 else ("medium" if pct > 0.02 else "low")
                 issues.append((sev, f"Outliers · {c}", f"{out:,}",
                                f"{out:,} values fall outside the IQR fences [{lo:.2f}, {hi:.2f}]."))
-
     for c in num_cols:
         if _rustcore.has_negative(f64(df[c])):
             issues.append(("low", f"Negative values · {c}", "present",
                            f"“{c}” contains negative values — verify whether that is expected."))
-
     for c in num_cols:
         sk = _rustcore.skewness(f64(df[c]))
         if sk == sk and abs(sk) > 1:
             issues.append(("low", f"Skewed distribution · {c}", f"skew {sk:.1f}",
                            f"“{c}” is highly skewed — a log transform may help."))
-
     for c in cat_cols:
         raw = df[c].to_list()
         cleaned = _rustcore.normalize_whitespace([str(v) if v is not None else None for v in raw])
@@ -922,7 +937,6 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
         if bad > 0:
             issues.append(("low", f"Whitespace issues · {c}", f"{bad:,}",
                            f"{bad:,} values in “{c}” have leading/trailing or repeated whitespace."))
-
     for c in cat_cols:
         nn = df[c].drop_nulls()
         u = nn.n_unique()
@@ -937,7 +951,6 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
     cH = sum(1 for i in issues if i[0] == "high")
     cM = sum(1 for i in issues if i[0] == "medium")
     cL = sum(1 for i in issues if i[0] == "low")
-
     if issues:
         items = ""
         for sev, title, metric, detail in issues:
@@ -957,22 +970,16 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
         quality_html = (
             '<div class="panel"><div class="q-head"><h3>Data quality issues '
             '<span>(%d found)</span></h3><div class="q-filters">%s</div></div>'
-            '<div class="q-list">%s</div></div>'
-        ) % (len(issues), chips, items)
+            '<div class="q-list">%s</div></div>') % (len(issues), chips, items)
     else:
         quality_html = ('<div class="panel ok"><h3>&#10003; No major data quality '
                         'issues detected</h3></div>')
 
-    # ---- preview & overview --------------------------------------------------
     preview_html = df_pandas.head(8).to_html(index=False, border=0, classes="preview")
     overview_body = (
-        '<div class="kpi-row">' + kpi_html + '</div>'
-        + quality_html +
+        '<div class="kpi-row">' + kpi_html + '</div>' + quality_html +
         '<div class="panel"><h3>Data preview <span>(first 8 rows)</span></h3>'
         '<div class="table-wrap">' + preview_html + '</div></div>')
-    uni_body = _grid(figures_univariate, "univariate")
-    bi_body = _grid(figures_bivariate, "bivariate")
-    multi_body = _grid(figures_multivariate, "multivariate", single=True, tall=True)
 
     topbar_bg = ""
     if background_image_path:
@@ -1027,6 +1034,12 @@ table.preview{border-collapse:collapse;width:100%;font-size:13px;}
 table.preview th{background:#1b2230;color:#cbd5e1;text-align:left;padding:9px 12px;position:sticky;top:0;}
 table.preview td{padding:8px 12px;border-top:1px solid var(--border);color:#c7cdd8;white-space:nowrap;}
 table.preview tr:hover td{background:#171c26;}
+.controls{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+.ctrl{display:flex;flex-direction:column;gap:6px;}
+.ctrl label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.controls select{background:#12151d;border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:9px;font-size:14px;min-width:170px;}
+.btn{background:var(--accent);border:none;color:#fff;padding:10px 20px;border-radius:9px;font-size:14px;cursor:pointer;height:39px;}
+.btn:hover{background:#2f6fd6;}
 .q-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
 .q-filters{display:flex;gap:8px;flex-wrap:wrap;}
 .chip{display:inline-flex;align-items:center;gap:7px;background:#1b2230;border:1px solid var(--border);color:var(--muted);padding:6px 13px;border-radius:20px;font-size:12px;cursor:pointer;transition:.15s;}
@@ -1037,9 +1050,7 @@ table.preview tr:hover td{background:#171c26;}
 .q-list{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
 .q-item{border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:10px;background:#141922;cursor:pointer;overflow:hidden;transition:border-color .15s;}
 .q-item:hover{border-color:#2d3646;}
-.q-item.high{border-left-color:#f87171;}
-.q-item.medium{border-left-color:#fbbf24;}
-.q-item.low{border-left-color:#38bdf8;}
+.q-item.high{border-left-color:#f87171;}.q-item.medium{border-left-color:#fbbf24;}.q-item.low{border-left-color:#38bdf8;}
 .q-row{display:flex;align-items:center;gap:12px;padding:12px 14px;}
 .q-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;}
 .q-item.high .q-dot{background:#f87171;}.q-item.medium .q-dot{background:#fbbf24;}.q-item.low .q-dot{background:#38bdf8;}
@@ -1061,6 +1072,8 @@ table.preview tr:hover td{background:#171c26;}
 
     js = """
 var SPECS=__SPECS__, SECMAP=__SECMAP__, RENDERED={};
+var DATA=__DATA__, COLTYPES=__COLTYPES__, CO=["#3b82f6","#22d3ee","#a78bfa","#f472b6","#fbbf24","#34d399","#f87171"];
+var biInited=false;
 function renderSection(sec){
   Object.keys(SECMAP).forEach(function(cid){
     if(SECMAP[cid]===sec && !RENDERED[cid] && document.getElementById(cid)){
@@ -1076,6 +1089,7 @@ function showSection(id, el){
   var n=document.querySelectorAll('.nav-item');for(var j=0;j<n.length;j++){n[j].classList.remove('active');}
   if(el){el.classList.add('active');}
   renderSection(id);
+  if(id==='bivariate' && !biInited){biInited=true; plotBi();}
   setTimeout(function(){window.dispatchEvent(new Event('resize'));},80);
 }
 function toggleSidebar(){
@@ -1088,9 +1102,44 @@ function filterQ(sev, el){
   var items=document.querySelectorAll('.q-item');
   for(var j=0;j<items.length;j++){items[j].style.display=(sev==='all'||items[j].dataset.sev===sev)?'':'none';}
 }
+function filterUni(v){
+  var cards=document.querySelectorAll('#uni-grid .card');
+  for(var i=0;i<cards.length;i++){cards[i].style.display=(v==='__all__'||cards[i].dataset.col===v)?'':'none';}
+  setTimeout(function(){window.dispatchEvent(new Event('resize'));},60);
+}
+function _uniq(a){var o=[],s={};for(var i=0;i<a.length;i++){var v=a[i];if(v!==null&&v!==undefined&&!s[v]){s[v]=1;o.push(v);}}return o;}
+function _baseLayout(t,xt,yt){return {title:t,template:'plotly_dark',paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:'#cbd5e1',size:12},margin:{l:55,r:20,t:52,b:48},colorway:CO,xaxis:{title:xt,gridcolor:'rgba(148,163,184,0.12)'},yaxis:{title:yt,gridcolor:'rgba(148,163,184,0.12)'}};}
+function plotBi(){
+  var x=document.getElementById('bi-x').value, y=document.getElementById('bi-y').value, c=document.getElementById('bi-c').value;
+  if(!x||!y){return;}
+  var tx=COLTYPES[x], ty=COLTYPES[y], traces=[], layout=_baseLayout(x+'  vs  '+y,x,y), k,i;
+  if(tx==='num'&&ty==='num'){
+    if(c&&c!=='__none__'){
+      var gs=_uniq(DATA[c]).slice(0,10); layout.showlegend=true;
+      for(k=0;k<gs.length;k++){var ix=[];for(i=0;i<DATA[c].length;i++){if(DATA[c][i]===gs[k])ix.push(i);}
+        traces.push({type:'scatter',mode:'markers',name:String(gs[k]),marker:{size:6,color:CO[k%CO.length]},
+          x:ix.map(function(i){return DATA[x][i];}),y:ix.map(function(i){return DATA[y][i];})});}
+    } else { traces.push({type:'scatter',mode:'markers',marker:{size:6,color:CO[0]},x:DATA[x],y:DATA[y]}); }
+  } else if(tx==='cat'&&ty==='num'){
+    var g1=_uniq(DATA[x]).slice(0,30); layout.showlegend=false;
+    for(k=0;k<g1.length;k++){var yy=[];for(i=0;i<DATA[x].length;i++){if(DATA[x][i]===g1[k])yy.push(DATA[y][i]);}
+      traces.push({type:'box',name:String(g1[k]),y:yy});}
+  } else if(tx==='num'&&ty==='cat'){
+    var g2=_uniq(DATA[y]).slice(0,30); layout.showlegend=false;
+    for(k=0;k<g2.length;k++){var xx=[];for(i=0;i<DATA[y].length;i++){if(DATA[y][i]===g2[k])xx.push(DATA[x][i]);}
+      traces.push({type:'box',name:String(g2[k]),x:xx,orientation:'h'});}
+  } else {
+    var xs=_uniq(DATA[x]).slice(0,30), ys=_uniq(DATA[y]).slice(0,10); layout.barmode='stack'; layout.showlegend=true;
+    for(k=0;k<ys.length;k++){var cnt=xs.map(function(xv){var m=0;for(i=0;i<DATA[x].length;i++){if(DATA[x][i]===xv&&DATA[y][i]===ys[k])m++;}return m;});
+      traces.push({type:'bar',name:String(ys[k]),x:xs.map(String),y:cnt});}
+    layout.yaxis.title='count';
+  }
+  Plotly.newPlot('bi-plot', traces, layout, {responsive:true, displayModeBar:false});
+}
 window.addEventListener('load', function(){ renderSection('overview'); });
 """
-    js = js.replace("__SPECS__", specs_js).replace("__SECMAP__", secmap_js)
+    js = (js.replace("__SPECS__", specs_js).replace("__SECMAP__", secmap_js)
+          .replace("__DATA__", data_js).replace("__COLTYPES__", coltypes_js))
 
     nav = (
         "<a class='nav-item active' onclick=\"showSection('overview',this)\"><span class='ico'>▦</span><span class='txt'>Overview</span></a>"
