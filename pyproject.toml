@@ -7,7 +7,7 @@ build-backend = "maturin"
 # This is the SAME project as "AutomatedCleaning" — `pip install AutomatedCleaning`
 # still works because pip normalizes names case-insensitively.
 name = "automatedcleaning"
-version = "1.6.0"
+version = "1.6.1"
 description = "Automated Data Cleaning Library with a Rust compute backend"
 readme = "README.md"
 requires-python = ">=3.11"
