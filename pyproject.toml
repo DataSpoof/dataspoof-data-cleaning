@@ -31,7 +31,6 @@ dependencies = [
     "nltk>=3.9",
     "scikit-learn>=1.5",
     "matplotlib>=3.9",
-    "seaborn>=0.13",
     "missingno>=0.5",
     "plotly>=6.0",
     "pyfiglet>=1.0",

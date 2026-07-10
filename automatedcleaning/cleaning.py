@@ -2,7 +2,6 @@
 import os
 import math
 import json
-import re
 import shutil
 import base64
 import warnings
@@ -10,19 +9,16 @@ import logging
 from typing import Dict, List
 
 # === Data Handling ===
-import numpy as np
 import pandas as pd
 import polars as pl
 
 # === NLP & Text Processing ===
 import nltk
-from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
 # === Visualization ===
 import matplotlib.pyplot as plt
-import seaborn as sns
 import missingno as msno
 import plotly.express as px
 import plotly.graph_objects as go
@@ -31,10 +27,9 @@ from plotly.subplots import make_subplots
 
 # === Sklearn ===
 from sklearn.impute import KNNImputer
-from sklearn.preprocessing import LabelEncoder
 
 # === PII Detection (Presidio) ===
-from presidio_analyzer import AnalyzerEngine, RecognizerResult
+from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 
 # === Other Libraries ===

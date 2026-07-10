@@ -12,8 +12,6 @@ categorical, outliers, duplicates, scaling, validation, domain, and text.
 """
 
 import re
-import math
-import unicodedata
 from urllib.parse import urlsplit, urlunsplit
 
 import numpy as np
@@ -770,7 +768,7 @@ def normalize_emails(df: pl.DataFrame, columns, add_flag: bool = True) -> pl.Dat
     """Lowercase/trim emails and flag validity (``email_validator`` if available)."""
     _header("Normalizing emails")
     try:
-        from email_validator import validate_email, EmailNotValidError
+        from email_validator import validate_email
         have_validator = True
     except Exception:
         have_validator = False
