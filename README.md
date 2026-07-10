@@ -145,6 +145,50 @@ ac.preprocess_text("I can't wait!! Visit https://x.co @bob 😀 it's GR8")
 # -> 'cannot wait visit'
 ```
 
+## Additional cleaning steps (`automatedcleaning.steps`)
+
+Beyond the core pipeline, ~45 focused, composable steps are available directly
+on `ac.*`. String-heavy ones (whitespace, Unicode NFKC, mojibake, disguised-missing,
+booleans) run in the Rust backend.
+
+```python
+df = ac.standardize_column_names(df)          # trim/lowercase/snake_case/de-dupe
+df = ac.drop_empty_rows_and_columns(df)
+df = ac.drop_high_missing_columns(df, 0.5)
+df = ac.remove_duplicate_columns(df)
+df = ac.drop_id_like_columns(df)
+df = ac.replace_disguised_missing(df, numeric_sentinels=[999, -1])  # "NA","?"… -> null (Rust)
+df = ac.add_missing_indicators(df)
+df = ac.impute_missing(df, numeric_strategy="mice")   # mean|median|knn|mice|interpolate|ffill|bfill
+df = ac.normalize_whitespace(df)              # Rust
+df = ac.normalize_unicode(df)                 # NFKC + control-char strip (Rust)
+df = ac.fix_mojibake(df)                       # "Ã©" -> "é" (Rust)
+df = ac.standardize_casing(df, {"name": "title"})
+df = ac.parse_dates(df, ["signup"])           # -> native datetime
+df = ac.extract_date_parts(df, ["signup"])    # year/month/day/weekday/quarter
+df = ac.normalize_booleans(df, ["active"])    # yes/no/Y/N/1/0 -> bool (Rust)
+df = ac.downcast_numeric(df)                  # int64->int32, etc.
+df = ac.group_rare_categories(df, 0.01)
+df = ac.fuzzy_cluster_categories(df)          # merge "New York"/"newyork" (rapidfuzz)
+df = ac.encode_categorical(df, "onehot")      # onehot|label|frequency|ordinal|target
+df = ac.remove_outliers_zscore(df)            # + _mad, _isolation_forest, _by_group
+df = ac.winsorize(df)                          # cap instead of drop
+df = ac.fuzzy_deduplicate(df, ["name","email"])
+df = ac.scale_numeric(df, "standard")         # minmax|standard|robust
+df = ac.bin_numeric(df, ["age"], bins=5)
+df = ac.apply_range_rules(df, {"age": (0, 120)}, action="clip")
+df = ac.validate_formats(df, {"email": "email", "phone": "phone"})
+df = ac.normalize_phone_numbers(df, ["phone"], region="US")   # -> E.164
+df = ac.normalize_emails(df, ["email"]); df = ac.canonicalize_urls(df, ["site"])
+```
+
+Steps that need optional libraries (`detect_language`, `redact_profanity`,
+`correct_spelling_text`) are installed via the extra:
+
+```bash
+pip install "AutomatedCleaning[text]"
+```
+
 ---
 
 ## Supported file formats

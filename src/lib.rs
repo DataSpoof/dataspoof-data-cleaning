@@ -4,6 +4,7 @@
 //! Each function takes plain Python lists (converted automatically by PyO3) so
 //! the Python frontend can hand columns straight from Polars/pandas.
 
+mod clean;
 mod stats;
 mod text;
 
@@ -109,6 +110,70 @@ fn detect_json_sample(samples: Vec<String>) -> bool {
     json_count > 0 && (json_count as f64 / samples.len() as f64) >= 0.5
 }
 
+/// Batch: trim + collapse whitespace. Nulls pass through.
+#[pyfunction]
+fn normalize_whitespace(py: Python<'_>, texts: Vec<Option<String>>) -> Vec<Option<String>> {
+    py.allow_threads(|| {
+        texts
+            .par_iter()
+            .map(|t| t.as_ref().map(|s| clean::normalize_whitespace(s)))
+            .collect()
+    })
+}
+
+/// Batch: NFKC + control-char removal. Nulls pass through.
+#[pyfunction]
+fn normalize_unicode(py: Python<'_>, texts: Vec<Option<String>>) -> Vec<Option<String>> {
+    py.allow_threads(|| {
+        texts
+            .par_iter()
+            .map(|t| t.as_ref().map(|s| clean::normalize_unicode(s)))
+            .collect()
+    })
+}
+
+/// Batch: repair UTF-8-as-Latin-1 mojibake. Nulls pass through.
+#[pyfunction]
+fn fix_mojibake(py: Python<'_>, texts: Vec<Option<String>>) -> Vec<Option<String>> {
+    py.allow_threads(|| {
+        texts
+            .par_iter()
+            .map(|t| t.as_ref().map(|s| clean::fix_mojibake(s)))
+            .collect()
+    })
+}
+
+/// Batch: map booleans to "true"/"false", unrecognized (and nulls) -> null.
+#[pyfunction]
+fn normalize_booleans(py: Python<'_>, texts: Vec<Option<String>>) -> Vec<Option<String>> {
+    py.allow_threads(|| {
+        texts
+            .par_iter()
+            .map(|t| t.as_ref().and_then(|s| clean::normalize_boolean(s)))
+            .collect()
+    })
+}
+
+/// Batch: replace disguised-missing sentinels with null (case-insensitive,
+/// trimmed). Non-matching values pass through unchanged.
+#[pyfunction]
+fn replace_disguised_missing(
+    py: Python<'_>,
+    texts: Vec<Option<String>>,
+    sentinels: Vec<String>,
+) -> Vec<Option<String>> {
+    let set: HashSet<String> = sentinels.into_iter().map(|s| s.to_lowercase()).collect();
+    py.allow_threads(|| {
+        texts
+            .par_iter()
+            .map(|t| match t {
+                Some(s) if clean::is_disguised_missing(s, &set) => None,
+                other => other.clone(),
+            })
+            .collect()
+    })
+}
+
 #[pymodule]
 fn _rustcore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__doc__", "Rust compute backend for AutomatedCleaning.")?;
@@ -121,5 +186,10 @@ fn _rustcore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(collinear_to_drop, m)?)?;
     m.add_function(wrap_pyfunction!(has_negative, m)?)?;
     m.add_function(wrap_pyfunction!(detect_json_sample, m)?)?;
+    m.add_function(wrap_pyfunction!(normalize_whitespace, m)?)?;
+    m.add_function(wrap_pyfunction!(normalize_unicode, m)?)?;
+    m.add_function(wrap_pyfunction!(fix_mojibake, m)?)?;
+    m.add_function(wrap_pyfunction!(normalize_booleans, m)?)?;
+    m.add_function(wrap_pyfunction!(replace_disguised_missing, m)?)?;
     Ok(())
 }
