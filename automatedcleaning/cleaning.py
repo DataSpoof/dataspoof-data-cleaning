@@ -763,10 +763,10 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
     """Render an interactive, enterprise-style EDA dashboard.
 
     Writes ``output/eda/dashboard.html`` with a collapsible left sidebar
-    (Overview / Univariate / Bivariate / Multivariate), a top bar with a
-    hamburger toggle, KPI cards, a data preview and responsive Plotly
-    chart-card grids. Charts are lazy-rendered per section so the page loads
-    instantly even with many plots.
+    (Overview / Univariate / Bivariate / Multivariate), a hamburger toggle,
+    KPI cards, an interactive **data-quality** panel, a data preview and
+    responsive Plotly chart-card grids. Charts are lazy-rendered per section so
+    the page loads instantly even with many plots.
     """
     if df is None:
         raise ValueError(
@@ -778,6 +778,12 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
     num_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
     cat_cols = df.select(pl.col(pl.Utf8)).columns
     PALETTE = ["#3b82f6", "#22d3ee", "#a78bfa", "#f472b6", "#fbbf24", "#34d399", "#f87171"]
+
+    def esc(s):
+        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    def f64(series):
+        return [float(x) if x is not None else float("nan") for x in series.to_list()]
 
     chart_json = []  # (cid, section, plotly_json_str)
 
@@ -843,7 +849,8 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
         hm.update_layout(title="Correlation heatmap")
         figures_multivariate.append(hm)
 
-    # ---- KPIs & preview ------------------------------------------------------
+    # ---- KPIs ----------------------------------------------------------------
+    n = df.height or 1
     total_cells = (df.height * df.width) or 1
     missing_cells = sum(df[c].null_count() for c in df.columns)
     try:
@@ -858,10 +865,108 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
     kpi_html = "".join(
         '<div class="kpi"><div class="kpi-val">' + v + '</div><div class="kpi-lbl">' + k + '</div></div>'
         for k, v in kpis)
-    preview_html = df_pandas.head(8).to_html(index=False, border=0, classes="preview")
 
+    # ---- data-quality issue detection ---------------------------------------
+    issues = []  # (severity, title, metric, detail)
+
+    for c in df.columns:
+        nc = df[c].null_count()
+        if nc > 0:
+            pct = nc / n
+            sev = "high" if pct > 0.3 else ("medium" if pct > 0.05 else "low")
+            issues.append((sev, f"Missing values · {c}", f"{pct:.1%}",
+                           f"{nc:,} of {n:,} rows are null in “{c}”."))
+
+    if dup_rows > 0:
+        sev = "high" if dup_rows / n > 0.05 else "medium"
+        issues.append((sev, "Duplicate rows", f"{dup_rows:,}",
+                       f"{dup_rows:,} fully duplicated rows — consider dropping them."))
+
+    for c in df.columns:
+        if df[c].n_unique() <= 1:
+            issues.append(("medium", f"Constant column · {c}", "1 value",
+                           f"“{c}” has a single unique value and carries no information."))
+
+    for c in df.columns:
+        ratio = df[c].n_unique() / n
+        if ratio > 0.95 and df.height > 10:
+            issues.append(("low", f"Possible identifier · {c}", f"{ratio:.0%} unique",
+                           f"“{c}” is nearly unique per row — likely an ID with no predictive value."))
+
+    for c in num_cols:
+        vals = [v for v in df[c].to_list() if v is not None]
+        if len(vals) >= 8:
+            lo, hi = _rustcore.iqr_bounds(f64(df[c]))
+            out = sum(1 for v in vals if v < lo or v > hi)
+            if out > 0:
+                pct = out / len(vals)
+                sev = "high" if pct > 0.1 else ("medium" if pct > 0.02 else "low")
+                issues.append((sev, f"Outliers · {c}", f"{out:,}",
+                               f"{out:,} values fall outside the IQR fences [{lo:.2f}, {hi:.2f}]."))
+
+    for c in num_cols:
+        if _rustcore.has_negative(f64(df[c])):
+            issues.append(("low", f"Negative values · {c}", "present",
+                           f"“{c}” contains negative values — verify whether that is expected."))
+
+    for c in num_cols:
+        sk = _rustcore.skewness(f64(df[c]))
+        if sk == sk and abs(sk) > 1:
+            issues.append(("low", f"Skewed distribution · {c}", f"skew {sk:.1f}",
+                           f"“{c}” is highly skewed — a log transform may help."))
+
+    for c in cat_cols:
+        raw = df[c].to_list()
+        cleaned = _rustcore.normalize_whitespace([str(v) if v is not None else None for v in raw])
+        bad = sum(1 for a, b in zip(raw, cleaned) if a is not None and str(a) != b)
+        if bad > 0:
+            issues.append(("low", f"Whitespace issues · {c}", f"{bad:,}",
+                           f"{bad:,} values in “{c}” have leading/trailing or repeated whitespace."))
+
+    for c in cat_cols:
+        u = df[c].n_unique()
+        lu = df[c].drop_nulls().str.to_lowercase().n_unique()
+        if u > lu:
+            issues.append(("medium", f"Inconsistent casing · {c}", f"{u - lu} merge(s)",
+                           f"{u} distinct values in “{c}” collapse to {lu} when lowercased "
+                           f"(e.g. 'USA' vs 'usa')."))
+
+    sev_rank = {"high": 0, "medium": 1, "low": 2}
+    issues.sort(key=lambda x: sev_rank[x[0]])
+    cH = sum(1 for i in issues if i[0] == "high")
+    cM = sum(1 for i in issues if i[0] == "medium")
+    cL = sum(1 for i in issues if i[0] == "low")
+
+    if issues:
+        items = ""
+        for sev, title, metric, detail in issues:
+            items += (
+                '<div class="q-item %s" data-sev="%s" onclick="this.classList.toggle(\'open\')">'
+                '<div class="q-row"><span class="q-dot"></span>'
+                '<span class="q-title">%s</span><span class="q-badge">%s</span>'
+                '<span class="q-caret">&#9662;</span></div>'
+                '<div class="q-detail">%s</div></div>'
+            ) % (sev, sev, esc(title), esc(metric), esc(detail))
+        chips = (
+            '<button class="chip active" onclick="filterQ(\'all\',this)">All %d</button>'
+            '<button class="chip" onclick="filterQ(\'high\',this)"><span class="sd high"></span>High %d</button>'
+            '<button class="chip" onclick="filterQ(\'medium\',this)"><span class="sd medium"></span>Medium %d</button>'
+            '<button class="chip" onclick="filterQ(\'low\',this)"><span class="sd low"></span>Low %d</button>'
+        ) % (len(issues), cH, cM, cL)
+        quality_html = (
+            '<div class="panel"><div class="q-head"><h3>Data quality issues '
+            '<span>(%d found)</span></h3><div class="q-filters">%s</div></div>'
+            '<div class="q-list">%s</div></div>'
+        ) % (len(issues), chips, items)
+    else:
+        quality_html = ('<div class="panel ok"><h3>&#10003; No major data quality '
+                        'issues detected</h3></div>')
+
+    # ---- preview & overview --------------------------------------------------
+    preview_html = df_pandas.head(8).to_html(index=False, border=0, classes="preview")
     overview_body = (
         '<div class="kpi-row">' + kpi_html + '</div>'
+        + quality_html +
         '<div class="panel"><h3>Data preview <span>(first 8 rows)</span></h3>'
         '<div class="table-wrap">' + preview_html + '</div></div>')
     uni_body = _grid(figures_univariate, "univariate")
@@ -912,14 +1017,37 @@ h2{font-size:19px;margin:2px 0 18px;}
 .kpi{background:linear-gradient(160deg,#1b2230,#161a22);border:1px solid var(--border);border-radius:14px;padding:18px;}
 .kpi-val{font-size:26px;font-weight:700;color:#fff;}
 .kpi-lbl{font-size:12px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.05em;}
-.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:22px;}
 .panel h3{margin:0 0 14px;font-size:15px;}
 .panel h3 span{color:var(--muted);font-weight:400;font-size:13px;}
+.panel.ok h3{color:#34d399;margin:0;}
 .table-wrap{overflow-x:auto;}
 table.preview{border-collapse:collapse;width:100%;font-size:13px;}
 table.preview th{background:#1b2230;color:#cbd5e1;text-align:left;padding:9px 12px;position:sticky;top:0;}
 table.preview td{padding:8px 12px;border-top:1px solid var(--border);color:#c7cdd8;white-space:nowrap;}
 table.preview tr:hover td{background:#171c26;}
+.q-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+.q-filters{display:flex;gap:8px;flex-wrap:wrap;}
+.chip{display:inline-flex;align-items:center;gap:7px;background:#1b2230;border:1px solid var(--border);color:var(--muted);padding:6px 13px;border-radius:20px;font-size:12px;cursor:pointer;transition:.15s;}
+.chip:hover{color:var(--text);}
+.chip.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.sd{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.sd.high{background:#f87171;}.sd.medium{background:#fbbf24;}.sd.low{background:#38bdf8;}
+.q-list{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+.q-item{border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:10px;background:#141922;cursor:pointer;overflow:hidden;transition:border-color .15s;}
+.q-item:hover{border-color:#2d3646;}
+.q-item.high{border-left-color:#f87171;}
+.q-item.medium{border-left-color:#fbbf24;}
+.q-item.low{border-left-color:#38bdf8;}
+.q-row{display:flex;align-items:center;gap:12px;padding:12px 14px;}
+.q-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;}
+.q-item.high .q-dot{background:#f87171;}.q-item.medium .q-dot{background:#fbbf24;}.q-item.low .q-dot{background:#38bdf8;}
+.q-title{flex:1;font-size:14px;color:var(--text);}
+.q-badge{background:#232c3d;color:#cbd5e1;padding:3px 11px;border-radius:20px;font-size:12px;white-space:nowrap;}
+.q-caret{color:var(--muted);transition:transform .2s;flex:none;}
+.q-item.open .q-caret{transform:rotate(180deg);}
+.q-detail{max-height:0;opacity:0;padding:0 14px;color:var(--muted);font-size:13px;transition:max-height .2s ease,opacity .2s ease,padding .2s ease;}
+.q-item.open .q-detail{max-height:160px;opacity:1;padding:0 14px 13px 38px;}
 .chart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:16px;}
 .chart-grid.single{grid-template-columns:1fr;}
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:8px;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s,box-shadow .15s;}
@@ -952,6 +1080,12 @@ function showSection(id, el){
 function toggleSidebar(){
   document.getElementById('app').classList.toggle('collapsed');
   setTimeout(function(){window.dispatchEvent(new Event('resize'));},240);
+}
+function filterQ(sev, el){
+  var chips=el.parentNode.querySelectorAll('.chip');for(var i=0;i<chips.length;i++){chips[i].classList.remove('active');}
+  el.classList.add('active');
+  var items=document.querySelectorAll('.q-item');
+  for(var j=0;j<items.length;j++){items[j].style.display=(sev==='all'||items[j].dataset.sev===sev)?'':'none';}
 }
 window.addEventListener('load', function(){ renderSection('overview'); });
 """
