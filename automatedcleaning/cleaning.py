@@ -750,6 +750,7 @@ def save_cleaned_data(df: pl.DataFrame, file_name="cleaned_data.csv", quantize=T
     # Save to CSV
     df.write_csv(file_name)
     print(f"✅ Cleaned data saved to {file_name}")
+    return df
 
 
 def save_dashboard(html_content, filename="dashboard.html"):
@@ -759,6 +760,11 @@ def save_dashboard(html_content, filename="dashboard.html"):
         f.write(html_content)
 
 def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
+    if df is None:
+        raise ValueError(
+            "generate_dashboard received None. Pass a DataFrame, e.g. the value "
+            "returned by clean_data(df) or load it with load_data('cleaned_data.csv')."
+        )
     df_pandas = df.to_pandas()
     num_cols = df.select(pl.col(pl.Float64, pl.Int64)).columns
     cat_cols = df.select(pl.col(pl.Utf8)).columns
