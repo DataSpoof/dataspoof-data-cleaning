@@ -1,6 +1,6 @@
 [package]
 name = "automatedcleaning-rustcore"
-version = "1.8.0"
+version = "1.8.1"
 edition = "2021"
 description = "Rust compute backend for the AutomatedCleaning Python library"
 license = "MIT"

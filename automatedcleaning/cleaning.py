@@ -924,12 +924,13 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
                            f"{bad:,} values in “{c}” have leading/trailing or repeated whitespace."))
 
     for c in cat_cols:
-        u = df[c].n_unique()
-        lu = df[c].drop_nulls().str.to_lowercase().n_unique()
+        nn = df[c].drop_nulls()
+        u = nn.n_unique()
+        lu = nn.str.to_lowercase().n_unique()
         if u > lu:
             issues.append(("medium", f"Inconsistent casing · {c}", f"{u - lu} merge(s)",
                            f"{u} distinct values in “{c}” collapse to {lu} when lowercased "
-                           f"(e.g. 'USA' vs 'usa')."))
+                           f"(values that differ only in letter case)."))
 
     sev_rank = {"high": 0, "medium": 1, "low": 2}
     issues.sort(key=lambda x: sev_rank[x[0]])
