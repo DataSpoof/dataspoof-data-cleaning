@@ -194,8 +194,10 @@ def replace_disguised_missing(df: pl.DataFrame, extra_sentinels=None,
 
     if numeric_sentinels:
         for col in _numeric_cols(df):
+            # Polars 2 requires matching dtypes for is_in, so cast the sentinels.
+            codes = pl.Series(list(numeric_sentinels)).cast(df.schema[col], strict=False)
             df = df.with_columns(
-                pl.when(pl.col(col).is_in(list(numeric_sentinels)))
+                pl.when(pl.col(col).is_in(codes))
                 .then(None).otherwise(pl.col(col)).alias(col)
             )
     print(f"Applied {len(sentinels)} sentinel patterns")
@@ -731,7 +733,7 @@ def check_referential_integrity(df: pl.DataFrame, column: str, valid_values,
                                 drop_invalid: bool = False) -> pl.DataFrame:
     """Report (optionally drop) rows whose ``column`` value is not in ``valid_values``."""
     _header(f"Checking referential integrity of '{column}'")
-    valid_values = list(valid_values)
+    valid_values = pl.Series(list(valid_values)).cast(df.schema[column], strict=False)
     bad = df.filter(~pl.col(column).is_in(valid_values) & pl.col(column).is_not_null()).height
     print(f"'{column}': {bad} rows reference values not in the allowed set")
     if drop_invalid and bad:
