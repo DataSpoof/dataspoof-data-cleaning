@@ -7,7 +7,7 @@ build-backend = "maturin"
 # This is the SAME project as "AutomatedCleaning" — `pip install AutomatedCleaning`
 # still works because pip normalizes names case-insensitively.
 name = "automatedcleaning"
-version = "1.10.0"
+version = "1.11.0"
 description = "Automated Data Cleaning Library with a Rust compute backend"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -42,6 +42,8 @@ dependencies = [
     "phonenumbers>=8.13",
     "email-validator>=2.0",
     "python-dateutil>=2.9",
+    # Pipeline configs in YAML
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -51,6 +53,13 @@ text = [
     "better-profanity>=0.7",
     "pyspellchecker>=0.8",
 ]
+test = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
 
 [project.urls]
 Homepage = "https://github.com/DataSpoof/dataspoof-data-cleaning"

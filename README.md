@@ -112,6 +112,95 @@ It writes `cleaned_data.csv` and an EDA dashboard to `output/eda/dashboard.html`
 
 ---
 
+## Pipelines: fit once, apply anywhere (recommended for production)
+
+`clean_data()` is interactive and re-learns everything from whatever data it is given. For
+scheduled jobs, train/test splits and production scoring, use a **pipeline** instead. It asks
+no questions, learns its cleaning rules on training data, and replays exactly those rules on
+new data, so a test set or a production batch never influences how it is cleaned.
+
+```python
+import automatedcleaning as ac
+
+pipe = ac.default_cleaning_pipeline()
+train_clean = pipe.fit_transform(train_df)   # learn the rules on training data
+test_clean = pipe.transform(test_df)         # same rules, nothing re-learned
+
+print(pipe.report_)                          # what each step did (rows, columns, nulls, time)
+pipe.save("cleaning_pipeline.json")          # everything it learned, as plain JSON (no pickle)
+
+# later, in a scheduled job or an API
+pipe = ac.Pipeline.load("cleaning_pipeline.json")
+batch_clean = pipe.transform(batch_df)
+```
+
+The default pipeline: fix missing-value placeholders → normalise text → repair numbers and
+dates stored as text → drop duplicate rows (training only) → drop useless columns (mostly
+missing, constant, ID-like, duplicated) → impute, adding a `<col>_was_missing` flag for
+columns ≥5% missing → group rare categories → cap extreme outliers (3×IQR) → drop
+near-duplicate numeric columns. Change any step by name:
+
+```python
+pipe = ac.default_cleaning_pipeline(clip_outliers=False, impute={"numeric": "mean"})
+```
+
+### Build your own pipeline
+
+Mix the stateful steps (which learn in `fit`) with any of the functions above:
+
+```python
+pipe = ac.Pipeline([
+    "replace_disguised_missing",                       # any library function, by name
+    ac.ConvertNumericText(),
+    ac.Impute(numeric="median", add_indicators=True),
+    ac.EncodeCategorical(method="onehot"),
+    ac.Scale(method="standard"),
+], name="churn-features")
+```
+
+Stateful steps: `drop_columns`, `drop_collinear`, `convert_numeric_text`, `parse_dates`,
+`impute`, `clip_outliers`, `remove_outliers`, `log_transform_skewed`, `scale`,
+`group_rare_categories`, `encode_categorical`, `drop_duplicates`. Run
+`ac.available_steps()` to list every step name with a description.
+
+### Config files
+
+Keep pipelines in version control as YAML or JSON:
+
+```yaml
+# cleaning.yaml
+name: churn-cleaning
+on_schema_mismatch: raise        # warn (default) | raise | ignore
+steps:
+  - step: replace_disguised_missing
+    params: {numeric_sentinels: [-999]}
+  - step: drop_columns
+    params: {max_missing: 0.5}
+  - step: impute
+    params: {numeric: median, add_indicators: true}
+  - step: remove_outliers          # drops rows during fit only
+```
+
+```python
+pipe = ac.Pipeline.from_config("cleaning.yaml")
+```
+
+### Built for production
+
+- **Schema checks:** `transform` compares incoming columns and types with the training data
+  and warns, or raises with `on_schema_mismatch="raise"`.
+- **Training-only steps:** row-removing steps (`drop_duplicates`, `remove_outliers`) run during
+  `fit` and are skipped by `transform`, so scoring never silently drops records.
+- **Audit trail:** every run produces a `RunReport` with a run ID, timings, per-step changes,
+  data fingerprints, the config hash and library versions. Pass `audit_log="runs.jsonl"`
+  to append each run to a file.
+- **Safe persistence:** saved pipelines are plain JSON you can review, diff and load
+  safely. Nothing is pickled.
+- **Extensible:** subclass `ac.Step` and decorate it with `@ac.register_step` to add your own
+  steps; they work in configs and in saved pipelines like the built-in ones.
+
+---
+
 ## Using individual steps
 
 Every stage is also a standalone function you can call directly — useful for scripting or
@@ -219,7 +308,22 @@ src/
   lib.rs              # PyO3 module — functions exposed to Python
   text.rs             # text preprocessing (contractions, regex, stopwords)
   stats.rs            # skewness, IQR, correlation, multicollinearity
-automatedcleaning/    # Python frontend package
+  clean.rs            # whitespace, Unicode, mojibake, booleans, placeholders
+automatedcleaning/
+  core/               # shared Step/Pipeline core (no imports from the rest of the package)
+  cleaners.py         # stateful cleaning steps + default_cleaning_pipeline()
+  steps.py            # 43 standalone cleaning functions
+  cleaning.py         # interactive clean_data() pipeline and EDA dashboard
+tests/                # pytest suite
+```
+
+Run the tests (needs the Rust toolchain to build the extension):
+
+```bash
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install maturin
+maturin develop --release --extras test
+pytest
 ```
 
 Cross-platform wheels are built and published to PyPI automatically via GitHub Actions
