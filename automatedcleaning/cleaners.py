@@ -17,14 +17,20 @@ from __future__ import annotations
 import contextlib
 import io
 import math
-import re
 
 import numpy as np
 import polars as pl
 
 from . import _rustcore
+from ._detect import CODE_TOKENS as _CODE_TOKENS
+from ._detect import DATE_RE as _DATE_RE
+from ._detect import NUM_RE as _NUM_RE
+from ._detect import floats as _floats
+from ._detect import is_num as _is_num
+from ._detect import is_text as _is_text
+from ._detect import real_text as _real_text
+from ._detect import tokens as _tokens
 from .core import Pipeline, Step, register_step
-from .steps import DEFAULT_MISSING_SENTINELS
 
 __all__ = [
     "DropColumns", "ConvertNumericText", "ParseDates", "Impute", "ClipOutliers",
@@ -33,41 +39,10 @@ __all__ = [
     "default_cleaning_pipeline", "DEFAULT_CLEANING_STEPS",
 ]
 
-_SENTINELS = sorted({s.lower() for s in DEFAULT_MISSING_SENTINELS})
-_CODE_TOKENS = {"phone", "mobile", "tel", "telephone", "cell", "cellphone", "fax", "zip",
-                "zipcode", "postal", "postcode", "pin", "pincode", "code", "id", "sku",
-                "isbn", "account", "acct"}
-# "1,200", "$50", "-7.5", "(30)", "12%", ".5"
-_NUM_RE = (r"^\(?\s*[-+]?\s*[$₹€£¥]?\s*[-+]?\s*"
-           r"(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)\s*%?\s*\)?$")
-# ISO, D/M/Y or M/D/Y with - / . separators, and month-name dates, with an optional time.
-_DATE_RE = (r"^(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.](?:\d{4}|\d{2})"
-            r"|(?i:(?:\d{1,2}(?:st|nd|rd|th)?\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
-            r"[a-z]*\.?\s+(?:\d{1,2}(?:st|nd|rd|th)?,?\s+)?\d{4}))"
-            r"(?:[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s*[AaPp][Mm])?(?:Z|[+-]\d{2}:?\d{2})?)?$")
-
-
 # ── helpers ──────────────────────────────────────────────────────────────────
-
-def _tokens(name) -> set:
-    s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(name))
-    return {t for t in re.split(r"[^a-z0-9]+", s.lower()) if t}
-
-
-def _is_text(dtype) -> bool:
-    return dtype == pl.String
-
-
-def _is_num(dtype) -> bool:
-    return dtype.is_numeric()
-
 
 def _cols(df: pl.DataFrame, columns, pred) -> list:
     return [c for c, t in df.schema.items() if (columns is None or c in columns) and pred(t)]
-
-
-def _floats(series: pl.Series) -> list:
-    return [float(v) if v is not None else float("nan") for v in series.to_list()]
 
 
 def _plain(v):
@@ -80,12 +55,6 @@ def _plain(v):
 
 def _quiet():
     return contextlib.redirect_stdout(io.StringIO())
-
-
-def _real_text(series: pl.Series) -> pl.Series:
-    """Non-null, trimmed values that aren't missing-value placeholders."""
-    s = series.drop_nulls().cast(pl.String, strict=False).str.strip_chars()
-    return s.filter(~s.str.to_lowercase().is_in(_SENTINELS))
 
 
 def _fences(s: pl.Series, method: str, k: float, lower_q: float, upper_q: float):

@@ -784,9 +784,6 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
         return (str(s).replace("&", "&amp;").replace("<", "&lt;")
                 .replace(">", "&gt;").replace('"', "&quot;"))
 
-    def f64(series):
-        return [float(x) if x is not None else float("nan") for x in series.to_list()]
-
     chart_json = []  # (cid, section, plotly_json_str)
 
     def _register(fig, section, tall=False, col=None):
@@ -873,7 +870,6 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
         '<div class="card"><div id="bi-plot" class="plot tall"></div></div>')
 
     # ---- KPIs ----------------------------------------------------------------
-    n = df.height or 1
     total_cells = (df.height * df.width) or 1
     missing_cells = sum(df[c].null_count() for c in df.columns)
     try:
@@ -889,345 +885,25 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
         '<div class="kpi"><div class="kpi-val">' + v + '</div><div class="kpi-lbl">' + k + '</div></div>'
         for k, v in kpis)
 
-    # ---- data-quality issue detection ---------------------------------------
-    import re as _re
-    import datetime as _dt
-    from .steps import DEFAULT_MISSING_SENTINELS
-
-    sentinels = list(DEFAULT_MISSING_SENTINELS)
-    this_year = _dt.date.today().year
-    PHONE_TOKENS = {"phone", "mobile", "tel", "telephone", "cell", "cellphone", "fax"}
-    CODE_TOKENS = PHONE_TOKENS | {"zip", "zipcode", "postal", "postcode", "pin", "pincode",
-                                  "code", "id", "sku", "isbn", "account", "acct"}
-    NONNEG_TOKENS = {"price", "cost", "amount", "salary", "income", "quantity", "qty", "count",
-                     "sales", "revenue", "fare", "weight", "height", "distance", "duration",
-                     "population", "area", "volume", "length", "width"}
-
-    def _tokens(name):
-        s = _re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(name))
-        return {t for t in _re.split(r"[^a-z0-9]+", s.lower()) if t}
-
-    def _fmt(vals):
-        return ", ".join(f"{v:g}" if isinstance(v, float) else
-                         f"'{v}'" if isinstance(v, str) else str(v) for v in vals)
-
-    def _n(k, word, plural=None):
-        return f"{k:,} {word if k == 1 else (plural or word + 's')}"
-
-    def _non_sentinel(series):
-        s = series.drop_nulls().cast(pl.Utf8, strict=False).str.strip_chars()
-        return s.filter(~s.str.to_lowercase().is_in(sentinels))
-
-    placeholders = {}   # numeric column -> placeholder codes found (e.g. [-999])
-
-    def _num_series(c):
-        """Non-null values of a numeric column, minus any detected placeholder codes."""
-        s = df[c].drop_nulls()
-        if placeholders.get(c):
-            s = s.filter(~s.is_in(pl.Series(placeholders[c]).cast(s.dtype)))
-        return s
-
-    def _range_rule(name):
-        t = _tokens(name)
-        if "age" in t:
-            return 0, 120, "an age"
-        if t & {"pct", "percent", "percentage"}:
-            return 0, 100, "a percentage"
-        if t & {"prob", "probability"}:
-            return 0, 1, "a probability"
-        if t & {"year", "yr"}:
-            return 1900, this_year + 1, "a year"
-        if "month" in t:
-            return 1, 12, "a month number"
-        if "hour" in t:
-            return 0, 23, "an hour"
-        if t & NONNEG_TOKENS:
-            return 0, None, "a non-negative quantity"
-        return None
-
-    issues = []
-    text_flagged = set()   # text columns that really hold numbers or dates
-    ranged = set()         # numeric columns covered by a range rule
-    for c in df.columns:
-        nc = df[c].null_count()
-        if nc > 0:
-            pct = nc / n
-            sev = "high" if pct > 0.3 else ("medium" if pct > 0.05 else "low")
-            issues.append((sev, f"Missing values · {c}", f"{pct:.1%}",
-                           f"{nc:,} of {n:,} rows are null in “{c}”."))
-    if dup_rows > 0:
-        sev = "high" if dup_rows / n > 0.05 else "medium"
-        issues.append((sev, "Duplicate rows", f"{dup_rows:,}",
-                       f"{dup_rows:,} fully duplicated rows — consider dropping them."))
-    for c in df.columns:
-        if df[c].n_unique() <= 1:
-            issues.append(("medium", f"Constant column · {c}", "1 value",
-                           f"“{c}” has a single unique value and carries no information."))
-
-    # Disguised missing values in text columns ("NA", "?", "-", "unknown", "" ...)
-    for c in cat_cols:
-        nn = df[c].drop_nulls()
-        if nn.len() == 0:
-            continue
-        mask = nn.str.strip_chars().str.to_lowercase().is_in(sentinels)
-        k = int(mask.sum())
-        if k:
-            vc = nn.filter(mask).value_counts(sort=True)
-            toks = ", ".join(f"'{tok}' ×{cnt:,}" for tok, cnt in
-                             list(zip(vc[vc.columns[0]].to_list(), vc["count"].to_list()))[:4])
-            issues.append(("high" if k / n > 0.05 else "medium",
-                           f"Disguised missing values · {c}", f"{k:,}",
-                           f"“{c}” has {_n(k, 'missing-data placeholder')} ({toks}), which "
-                           f"{'is' if k == 1 else 'are'} not counted as null. Convert with "
-                           f"ac.replace_disguised_missing(df)."))
-
-    # Placeholder numbers in numeric columns (-999, 999, -1 ...)
-    NUM_SENTINELS = [-9999, -999, -99, -1, 999, 9999, 99999]
-    for c in num_cols:
-        s = df[c].drop_nulls()
-        if s.len() < 10 or s.n_unique() <= 3:
-            continue
-        found = []
-        for v in NUM_SENTINELS:
-            cnt = int((s == v).sum())
-            if cnt < max(2, 0.01 * s.len()):
-                continue
-            others = s.filter(s != v)
-            if others.len() == 0:
-                continue
-            if v < 0:
-                if others.min() < 0:
-                    continue
-            else:
-                mx = others.max()
-                if mx >= v or (mx > 0 and v < 1.5 * mx):
-                    continue
-            found.append((v, cnt))
-        if found:
-            placeholders[c] = [v for v, _ in found]
-            rest = _num_series(c)
-            total = sum(cnt for _, cnt in found)
-            toks = ", ".join(f"{v} ×{cnt:,}" for v, cnt in found)
-            issues.append(("medium", f"Placeholder numbers · {c}", f"{total:,}",
-                           f"“{c}” contains likely missing-value codes ({toks}) that sit outside "
-                           f"the rest of the data ({_fmt([rest.min()])} to {_fmt([rest.max()])}). "
-                           f"Convert them with ac.replace_disguised_missing(df, numeric_sentinels=[...])."))
-
-    # Numbers stored as text (e.g. "1,200", "$50", or digits blocked by a "-")
-    NUM_RE = (r"^\(?\s*[-+]?\s*[$₹€£¥]?\s*[-+]?\s*"
-              r"(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)\s*%?\s*\)?$")
-    for c in cat_cols:
-        if _tokens(c) & CODE_TOKENS:
-            continue
-        nn = df[c].drop_nulls().str.strip_chars()
-        if nn.len() < 5:
-            continue
-        sent_mask = nn.str.to_lowercase().is_in(sentinels)
-        real = nn.filter(~sent_mask)
-        if real.len() < 5:
-            continue
-        is_num = real.str.contains(NUM_RE)
-        k = int(is_num.sum())
-        if k / real.len() < 0.9:
-            continue
-        nums = real.filter(is_num)
-        if nums.str.contains(r"^[-+]?0\d").mean() > 0.1:   # leading zeros -> codes
-            continue
-        text_flagged.add(c)
-        blockers = (real.filter(~is_num).unique().head(3).to_list()
-                    + nn.filter(sent_mask).unique().head(3).to_list())
-        n_fmt = int(nums.str.contains(r"[,$₹€£¥%()]").sum())
-        reasons = []
-        if blockers:
-            reasons.append("non-numeric values like " + _fmt(blockers[:4]))
-        if n_fmt:
-            reasons.append(f"{_n(n_fmt, 'value')} carrying symbols or commas")
-        issues.append(("medium", f"Numbers stored as text · {c}", f"{k / real.len():.0%} numeric",
-                       f"{k:,} of {real.len():,} non-missing values in “{c}” are numbers, but the "
-                       f"column is typed as text"
-                       + (" because of " + " and ".join(reasons) if reasons else "")
-                       + ". Clean those values and cast the column to a number."))
-
-    # Dates stored as text, mixed date formats, impossible calendar dates
-    TIME = r"(?:[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s*[AaPp][Mm])?(?:Z|[+-]\d{2}:?\d{2})?)?$"
-    DATE_FORMATS = [
-        ("YYYY-MM-DD", r"^\d{4}-\d{1,2}-\d{1,2}" + TIME),
-        ("YYYY/MM/DD", r"^\d{4}/\d{1,2}/\d{1,2}" + TIME),
-        ("DD/MM/YYYY or MM/DD/YYYY", r"^\d{1,2}/\d{1,2}/(?:\d{4}|\d{2})" + TIME),
-        ("DD-MM-YYYY or MM-DD-YYYY", r"^\d{1,2}-\d{1,2}-(?:\d{4}|\d{2})" + TIME),
-        ("DD.MM.YYYY", r"^\d{1,2}\.\d{1,2}\.(?:\d{4}|\d{2})" + TIME),
-        ("Month name (e.g. Jan 5, 2021)",
-         r"(?i)^(?:\d{1,2}(?:st|nd|rd|th)?\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
-         r"[a-z]*\.?\s+(?:\d{1,2}(?:st|nd|rd|th)?,?\s+)?\d{4}" + TIME),
-    ]
-    iso_rx = _re.compile(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})")
-    for c in cat_cols:
-        if c in text_flagged:
-            continue
-        nn = _non_sentinel(df[c])
-        if nn.len() < 5:
-            continue
-        any_mask, used = None, []
-        for label, pat in DATE_FORMATS:
-            m = nn.str.contains(pat)
-            cnt = int(m.sum())
-            if cnt:
-                used.append((label, cnt))
-            any_mask = m if any_mask is None else (any_mask | m)
-        matched = int(any_mask.sum())
-        if matched / nn.len() < 0.6:
-            continue
-        text_flagged.add(c)
-        invalid = 0
-        for v in nn.to_list()[:20000]:
-            mm = iso_rx.match(v)
-            if mm:
-                try:
-                    _dt.date(int(mm.group(1)), int(mm.group(2)), int(mm.group(3)))
-                except ValueError:
-                    invalid += 1
-        unmatched = nn.len() - matched
-        used.sort(key=lambda x: -x[1])
-        parts = [f"{lbl} ({cnt:,})" for lbl, cnt in used]
-        extra = []
-        if unmatched:
-            extra.append(f"{_n(unmatched, 'value')} not in a recognised date format")
-        if invalid:
-            extra.append(f"{_n(invalid, 'impossible calendar date')} (e.g. month 13)")
-        tail = (" " + "; ".join(extra) + ".") if extra else ""
-        if len(used) > 1:
-            issues.append(("medium", f"Mixed date formats · {c}", f"{len(used)} formats",
-                           f"“{c}” mixes date formats: {', '.join(parts)}.{tail} Standardise it "
-                           f"and parse it with ac.parse_dates(df, ['{c}'])."))
-        else:
-            issues.append(("medium" if (invalid or unmatched) else "low",
-                           f"Dates stored as text · {c}", used[0][0],
-                           f"“{c}” holds dates ({parts[0]}) but is typed as text.{tail} "
-                           f"Parse it with ac.parse_dates(df, ['{c}'])."))
-
-    # Possible identifiers: near-unique integer/text columns. Continuous floats are
-    # naturally unique, and text columns that really hold numbers/dates are reported above.
-    for c in df.columns:
-        if df[c].dtype in (pl.Float32, pl.Float64) or c in text_flagged:
-            continue
-        ratio = df[c].n_unique() / n
-        if ratio > 0.95 and df.height > 10:
-            issues.append(("low", f"Possible identifier · {c}", f"{ratio:.0%} unique",
-                           f"“{c}” is nearly unique per row — likely an ID with no predictive value."))
-
-    # The numeric checks below ignore detected placeholder codes (e.g. -999), so a
-    # placeholder is reported once instead of also as an outlier / out-of-range / skew.
-    for c in num_cols:
-        vals = _num_series(c).to_list()
-        if len(vals) >= 8:
-            lo, hi = _rustcore.iqr_bounds([float(v) for v in vals])
-            out = sum(1 for v in vals if v < lo or v > hi)
-            if out > 0:
-                pct = out / len(vals)
-                sev = "high" if pct > 0.1 else ("medium" if pct > 0.02 else "low")
-                issues.append((sev, f"Outliers · {c}", f"{out:,}",
-                               f"{_n(out, 'value')} outside the IQR fences [{lo:.2f}, {hi:.2f}]."))
-
-    # Values outside a valid range, inferred from the column name
-    for c in num_cols:
-        rule = _range_rule(c)
-        if not rule:
-            continue
-        ranged.add(c)
-        lo, hi, kind = rule
-        s = _num_series(c)
-        if s.len() == 0:
-            continue
-        bad_mask = (s < lo) if hi is None else ((s < lo) | (s > hi))
-        k = int(bad_mask.sum())
-        if k:
-            rng = f"≥ {lo}" if hi is None else f"[{lo}, {hi}]"
-            ex = s.filter(bad_mask).unique().sort().head(3).to_list()
-            issues.append(("high" if k / s.len() > 0.05 else "medium",
-                           f"Out-of-range values · {c}", f"{k:,}",
-                           f"“{c}” has {_n(k, 'value')} outside the valid range {rng} for "
-                           f"{kind} (e.g. {_fmt(ex)})."))
-
-    for c in num_cols:
-        if c in ranged:
-            continue   # already covered by the range rule above
-        if _rustcore.has_negative([float(v) for v in _num_series(c).to_list()]):
-            issues.append(("low", f"Negative values · {c}", "present",
-                           f"“{c}” contains negative values — verify whether that is expected."))
-    for c in num_cols:
-        sk = _rustcore.skewness([float(v) for v in _num_series(c).to_list()])
-        if sk == sk and abs(sk) > 1:
-            issues.append(("low", f"Skewed distribution · {c}", f"skew {sk:.1f}",
-                           f"“{c}” is highly skewed — a log transform may help."))
-    for c in cat_cols:
-        raw = df[c].to_list()
-        cleaned = _rustcore.normalize_whitespace([str(v) if v is not None else None for v in raw])
-        bad = sum(1 for a, b in zip(raw, cleaned) if a is not None and str(a) != b)
-        if bad > 0:
-            issues.append(("low", f"Whitespace issues · {c}", f"{bad:,}",
-                           f"“{c}” has {_n(bad, 'value')} with leading/trailing or repeated whitespace."))
-    for c in cat_cols:
-        nn = df[c].drop_nulls()
-        u = nn.n_unique()
-        lu = nn.str.to_lowercase().n_unique()
-        if u > lu:
-            issues.append(("medium", f"Inconsistent casing · {c}", f"{u - lu} merge(s)",
-                           f"{u} distinct values in “{c}” collapse to {lu} when lowercased "
-                           f"(values that differ only in letter case)."))
-
-    # Rare categories (each under 1% of rows)
-    for c in cat_cols:
-        if c in text_flagged:
-            continue
-        nn = _non_sentinel(df[c])          # placeholders are reported separately
-        k = nn.n_unique()
-        if nn.len() < 100 or k < 3 or k > 50:
-            continue
-        vc = nn.value_counts()
-        rare = vc.filter(pl.col("count") < 0.01 * nn.len())
-        if rare.height:
-            ex = rare.sort("count")[vc.columns[0]].head(3).to_list()
-            rows = int(rare["count"].sum())
-            issues.append(("low", f"Rare categories · {c}", f"{rare.height} rare",
-                           f"“{c}” has {_n(rare.height, 'category', 'categories')} (of {k}) that "
-                           f"each cover under 1% of rows — {_n(rows, 'row')} in total, e.g. "
-                           f"{_fmt(ex)}. They may be typos; otherwise consider grouping them "
-                           f"into 'Other' with ac.group_rare_categories(df)."))
-
-    # Invalid email addresses (by column name, or when most values contain "@")
-    EMAIL_RE = r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"
-    for c in cat_cols:
-        nn = _non_sentinel(df[c])
-        if nn.len() == 0:
-            continue
-        if not ({"email", "mail"} & _tokens(c)
-                or nn.str.contains("@", literal=True).mean() >= 0.5):
-            continue
-        bad = nn.filter(~nn.str.contains(EMAIL_RE))
-        if bad.len():
-            issues.append(("medium" if bad.len() / nn.len() > 0.05 else "low",
-                           f"Invalid email addresses · {c}", f"{bad.len():,}",
-                           f"“{c}” has {_n(bad.len(), 'invalid email address', 'invalid email addresses')} "
-                           f"out of {nn.len():,} (e.g. {_fmt(bad.unique().head(3).to_list())})."))
-
-    # Invalid phone numbers (by column name: phone, mobile, tel, cell, fax)
-    for c in df.columns:
-        if not (_tokens(c) & PHONE_TOKENS):
-            continue
-        nn = _non_sentinel(df[c])
-        if nn.len() == 0:
-            continue
-        nn = nn.str.replace(r"\.0$", "")
-        digits = nn.str.replace_all(r"\D", "").str.len_chars()
-        ok = (nn.str.contains(r"(?i)^[+\d\s\-().]+(?:\s*(?:x|ext\.?)\s*\d+)?$")
-              & (digits >= 7) & (digits <= 15))
-        bad = nn.filter(~ok)
-        if bad.len():
-            issues.append(("medium" if bad.len() / nn.len() > 0.05 else "low",
-                           f"Invalid phone numbers · {c}", f"{bad.len():,}",
-                           f"“{c}” has {_n(bad.len(), 'invalid phone number')} out of "
-                           f"{nn.len():,} (a valid one has 7–15 digits and only digits, spaces, "
-                           f"+ - ( ) .), e.g. {_fmt(bad.unique().head(3).to_list())}."))
+    # ---- data quality: single source of truth is automatedcleaning.quality ----
+    from .quality import check_quality, grade as _grade
+    qreport = check_quality(df)
+    issues = [(i.severity, i.title, i.metric, i.detail) for i in qreport.issues]
+    grade_colors = {"A": "#34d399", "B": "#a3e635", "C": "#fbbf24", "D": "#fb923c", "F": "#f87171"}
+    dim_rows = "".join(
+        '<div class="dim"><span class="dim-name">%s</span><div class="dim-bar">'
+        '<i style="width:%.1f%%;background:%s"></i></div><b>%.1f</b></div>'
+        % (d.capitalize(), v, grade_colors[_grade(v)], v) for d, v in qreport.dimensions.items())
+    weakest = qreport.weakest_columns()
+    weakest_html = ('<div class="score-weak">Weakest columns: ' + ", ".join(
+        '%s <b style="color:%s">%.0f</b>' % (esc(c), grade_colors[_grade(s)], s) for c, s in weakest)
+        + '</div>') if weakest else ""
+    score_html = (
+        '<div class="panel score-panel"><div class="score-main">'
+        '<div class="score-num" style="color:%s">%.1f</div><div><div class="score-grade">Grade %s</div>'
+        '<div class="score-sub">Data quality score (0-100)</div>%s</div></div>'
+        '<div class="dims">%s</div></div>'
+    ) % (grade_colors[qreport.grade], qreport.score, qreport.grade, weakest_html, dim_rows)
 
     sev_rank = {"high": 0, "medium": 1, "low": 2}
     issues.sort(key=lambda x: sev_rank[x[0]])
@@ -1260,7 +936,7 @@ def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
 
     preview_html = df_pandas.head(8).to_html(index=False, border=0, classes="preview")
     overview_body = (
-        '<div class="kpi-row">' + kpi_html + '</div>' + quality_html +
+        '<div class="kpi-row">' + kpi_html + '</div>' + score_html + quality_html +
         '<div class="panel"><h3>Data preview <span>(first 8 rows)</span></h3>'
         '<div class="table-wrap">' + preview_html + '</div></div>')
 
@@ -1323,6 +999,18 @@ table.preview tr:hover td{background:#171c26;}
 .controls select{background:#12151d;border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:9px;font-size:14px;min-width:170px;}
 .btn{background:var(--accent);border:none;color:#fff;padding:10px 20px;border-radius:9px;font-size:14px;cursor:pointer;height:39px;}
 .btn:hover{background:#2f6fd6;}
+.score-panel{display:flex;gap:32px;align-items:center;flex-wrap:wrap;}
+.score-main{display:flex;align-items:center;gap:16px;min-width:220px;}
+.score-num{font-size:46px;font-weight:800;line-height:1;}
+.score-grade{font-size:16px;font-weight:700;}
+.score-sub{font-size:12px;color:var(--muted);margin-top:4px;}
+.score-weak{font-size:12px;color:var(--muted);margin-top:8px;}
+.dims{flex:1;min-width:260px;display:grid;gap:10px;}
+.dim{display:grid;grid-template-columns:110px 1fr 46px;align-items:center;gap:12px;font-size:13px;}
+.dim-name{color:var(--muted);}
+.dim-bar{height:8px;background:#232a37;border-radius:6px;overflow:hidden;}
+.dim-bar i{display:block;height:100%;border-radius:6px;}
+.dim b{text-align:right;font-weight:600;}
 .q-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
 .q-filters{display:flex;gap:8px;flex-wrap:wrap;}
 .chip{display:inline-flex;align-items:center;gap:7px;background:#1b2230;border:1px solid var(--border);color:var(--muted);padding:6px 13px;border-radius:20px;font-size:12px;cursor:pointer;transition:.15s;}

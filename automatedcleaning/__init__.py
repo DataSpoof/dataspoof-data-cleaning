@@ -5,6 +5,11 @@ from .core import (FunctionStep, NotFittedError, Pipeline, PipelineStepError, Pi
                    RunReport, SchemaMismatchError, Step, available_steps, register_function,
                    register_function_namespace, register_step)
 from .cleaners import *
+from . import quality
+from .quality import (ColumnProfile, Contract, ContractError, ContractResult, ContractViolation,
+                      Issue, Profile, QualityGate, QualityGateError, QualityReport, QualityWarning,
+                      SchemaDiff, ValidateContract, check_quality, compare_schemas, infer_schema,
+                      profile)
 
 # Every function in steps.py works as a pipeline step by name, e.g. {"step": "normalize_unicode"}.
 register_function_namespace(_steps)
