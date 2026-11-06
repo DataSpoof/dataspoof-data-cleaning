@@ -28,10 +28,19 @@ class Step:
       what makes cleaning new data reproduce training-time behaviour exactly.
     * ``fit_only = True`` marks steps that only run while fitting (e.g. dropping duplicate
       or outlier rows); ``Pipeline.transform`` skips them.
+
+    Targets
+    -------
+    In a ``Pipeline(target=...)`` the target column is hidden from ordinary steps, so they
+    can't impute, clip, encode or drop it. Steps that need it (target encoding, feature
+    selection, leakage checks) set ``uses_target = True`` and receive the full frame; during
+    ``transform`` on new data the target may be absent and they must cope. Steps that only
+    remove rows implement ``row_mask`` so the pipeline can drop the same rows from the target.
     """
 
     name = ""
     fit_only = False
+    uses_target = False
 
     def __init__(self, fit_only: bool | None = None, **params: Any):
         self.params = params
@@ -44,6 +53,19 @@ class Step:
     def label(self) -> str:
         """Name shown in reports."""
         return self.name
+
+    def row_mask(self, df: pl.DataFrame):
+        """For steps that only remove rows: a boolean Series of rows to keep. Others: ``None``."""
+        return None
+
+    def _target(self, required: bool = True):
+        """The target column: the ``target`` param, else the pipeline's, else the one fitted on."""
+        target = (self.params.get("target") or getattr(self, "_pipeline_target", None)
+                  or (self.state_ or {}).get("target"))
+        if required and not target:
+            raise ValueError(f"Step '{self.label}' needs a target column: pass target=... or "
+                             f"build the Pipeline with target=...")
+        return target
 
     @property
     def is_fitted(self) -> bool:

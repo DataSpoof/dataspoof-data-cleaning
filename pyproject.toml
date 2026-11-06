@@ -7,7 +7,7 @@ build-backend = "maturin"
 # This is the SAME project as "AutomatedCleaning" — `pip install AutomatedCleaning`
 # still works because pip normalizes names case-insensitively.
 name = "automatedcleaning"
-version = "1.12.0"
+version = "1.13.0"
 description = "Automated Data Cleaning Library with a Rust compute backend"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -55,6 +55,19 @@ text = [
 ]
 test = [
     "pytest>=8.0",
+]
+# Extra AutoML model families (used automatically when installed).
+automl = [
+    "lightgbm>=4.0",
+    "xgboost>=2.0",
+]
+# shap's plotting library, for Explanation.to_shap(). SHAP values themselves need nothing extra.
+explain = [
+    "shap>=0.45",
+]
+# Neural text embeddings for TextEmbeddings(method="sentence_transformers").
+embeddings = [
+    "sentence-transformers>=2.0",
 ]
 
 [tool.pytest.ini_options]

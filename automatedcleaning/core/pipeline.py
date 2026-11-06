@@ -19,6 +19,7 @@ import io
 import json
 import math
 import platform
+import re
 import time
 import uuid
 import warnings
@@ -106,6 +107,17 @@ def _versions() -> dict:
     except metadata.PackageNotFoundError:
         out["automatedcleaning"] = "source"
     return out
+
+
+def _parse_dtype(name: str):
+    """Polars dtype from its string form ('Float64', "Datetime(time_unit='us', time_zone=None)")."""
+    simple = getattr(pl, name, None)
+    if isinstance(simple, type) and issubclass(simple, pl.DataType):
+        return simple
+    match = re.fullmatch(r"Datetime\(time_unit='(\w+)', time_zone=(?:None|'([^']+)')\)", name)
+    if match:
+        return pl.Datetime(match.group(1), match.group(2))
+    return None
 
 
 def _read_config(path) -> dict:
@@ -247,13 +259,17 @@ class Pipeline:
         receives columns/dtypes that differ from training.
     verbose : show the steps' own printed output (otherwise it is captured in the report).
     audit_log : optional path; every run appends one JSON line with its ``RunReport``.
+    target : optional label column. It is hidden from ordinary steps (so they can't impute,
+        clip, encode or drop it), passed to target-aware steps, and kept aligned when rows are
+        removed. It may be absent when transforming new data for prediction.
     """
 
     def __init__(self, steps=(), name: str = "pipeline", *, on_schema_mismatch: str = "warn",
-                 verbose: bool = False, audit_log=None):
+                 verbose: bool = False, audit_log=None, target: str | None = None):
         if on_schema_mismatch not in SCHEMA_POLICIES:
             raise ValueError(f"on_schema_mismatch must be one of {SCHEMA_POLICIES}")
         self.name = name
+        self.target = target
         self.steps = [make_step(s) for s in steps]
         self.on_schema_mismatch = on_schema_mismatch
         self.verbose = verbose
@@ -304,9 +320,14 @@ class Pipeline:
             except Exception as exc:
                 raise TypeError(f"Expected a polars or pandas DataFrame, got {type(df).__name__}") from exc
 
+        if mode == "fit" and self.target and self.target not in df.columns:
+            raise ValueError(f"Target column '{self.target}' is not in the training data.")
+        if mode == "transform":
+            df = self._restore_null_columns(df)
         run_warnings = self._check_schema(df) if mode == "transform" else []
         input_schema, input_fp = _schema(df), _fingerprint(df)
         started_at, t_start = _now(), time.perf_counter()
+        target = self.target if self.target and self.target in df.columns else None
         reports = []
 
         for i, step in enumerate(self.steps, 1):
@@ -317,9 +338,12 @@ class Pipeline:
                 continue
             buf = io.StringIO()
             t0 = time.perf_counter()
+            step._pipeline_target = self.target
             try:
                 with (contextlib.nullcontext() if self.verbose else contextlib.redirect_stdout(buf)):
-                    df = step.fit_transform(df) if mode == "fit" else step.transform(df)
+                    df = self._apply(step, df, mode, target)
+            except PipelineStepError:
+                raise
             except Exception as exc:
                 raise PipelineStepError(f"Step {i} '{step.label}' failed during {mode}: {exc}") from exc
             before, after = set(cols), set(df.columns)
@@ -342,8 +366,44 @@ class Pipeline:
                 fh.write(json.dumps(self.report_.to_dict()) + "\n")
         return df
 
+    def _restore_null_columns(self, df: pl.DataFrame) -> pl.DataFrame:
+        """A column that is entirely null in a batch arrives with dtype Null; give it back the
+        dtype it had in training so steps and the schema check see the expected type."""
+        fixes = []
+        for c, dtype in df.schema.items():
+            if dtype == pl.Null and c in (self.input_schema_ or {}):
+                wanted = _parse_dtype(self.input_schema_[c])
+                if wanted is not None:
+                    fixes.append(pl.col(c).cast(wanted))
+        return df.with_columns(fixes) if fixes else df
+
+    @staticmethod
+    def _apply(step: Step, df: pl.DataFrame, mode: str, target: str | None) -> pl.DataFrame:
+        """Run one step, hiding ``target`` from steps that don't use it."""
+        fitting = mode == "fit"
+        if target is None or step.uses_target:
+            return step.fit_transform(df) if fitting else step.transform(df)
+        y, X = df.get_column(target), df.drop(target)
+        if fitting:
+            step.fit(X)
+        elif step.state_ is None:
+            raise NotFittedError(f"Step '{step.label}' must be fitted before transform().")
+        mask = step.row_mask(X)
+        if mask is not None:                       # row filter: drop the same rows from y
+            return X.filter(mask).with_columns(y.filter(mask))
+        out = step.transform(X)
+        if out.width == 0:      # every feature dropped; Polars 1.x reports height 0 for such frames
+            return y.to_frame()
+        if out.height != X.height:
+            raise PipelineStepError(
+                f"Step '{step.label}' changed the number of rows, so the target '{target}' can't "
+                f"stay aligned. Steps that remove rows must implement row_mask().")
+        return out.with_columns(y)
+
     def _check_schema(self, df: pl.DataFrame) -> list:
-        expected, actual = self.input_schema_ or {}, _schema(df)
+        expected, actual = dict(self.input_schema_ or {}), _schema(df)
+        if self.target and self.target not in actual:
+            expected.pop(self.target, None)        # predicting: the label is legitimately absent
         problems = []
         missing = [c for c in expected if c not in actual]
         extra = [c for c in actual if c not in expected]
@@ -368,8 +428,11 @@ class Pipeline:
     # -- config & persistence ----------------------------------------------
     def to_config(self) -> dict:
         """The pipeline's recipe (steps + params), without learned state."""
-        return _jsonable({"name": self.name, "on_schema_mismatch": self.on_schema_mismatch,
-                          "steps": [s.to_dict(include_state=False) for s in self.steps]})
+        cfg = {"name": self.name, "on_schema_mismatch": self.on_schema_mismatch}
+        if self.target:
+            cfg["target"] = self.target
+        cfg["steps"] = [s.to_dict(include_state=False) for s in self.steps]
+        return _jsonable(cfg)
 
     def config_hash(self) -> str:
         blob = json.dumps(self.to_config(), sort_keys=True).encode()
@@ -381,7 +444,8 @@ class Pipeline:
         if not isinstance(config, dict):
             config = _read_config(config)
         opts = {"name": config.get("name", "pipeline"),
-                "on_schema_mismatch": config.get("on_schema_mismatch", "warn")}
+                "on_schema_mismatch": config.get("on_schema_mismatch", "warn"),
+                "target": config.get("target")}
         opts.update(settings)
         return cls(config.get("steps", []), **opts)
 
@@ -426,7 +490,8 @@ class Pipeline:
         return pipe
 
     def __repr__(self) -> str:
-        lines = [f"Pipeline({self.name!r}, fitted={self.is_fitted}, {len(self.steps)} steps)"]
+        target = f", target={self.target!r}" if self.target else ""
+        lines = [f"Pipeline({self.name!r}{target}, fitted={self.is_fitted}, {len(self.steps)} steps)"]
         for i, s in enumerate(self.steps, 1):
             lines.append(f"  {i:>2}. {s.label}{'  [fit only]' if s.fit_only else ''}")
         return "\n".join(lines)

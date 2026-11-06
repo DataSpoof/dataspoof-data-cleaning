@@ -108,6 +108,25 @@ def range_rule(name, this_year=None):
     return None
 
 
+def target_kind(series: pl.Series) -> str:
+    """``binary``, ``multiclass`` or ``regression`` for a label column.
+
+    Two distinct values -> binary. Text/categorical -> multiclass. Numbers with at most 10
+    distinct whole values (e.g. ratings 1-5, classes 0-3) -> multiclass. Otherwise regression.
+    """
+    s = series.drop_nulls()
+    n_unique = s.n_unique()
+    if series.dtype == pl.Boolean or n_unique <= 2:
+        return "binary"
+    if not series.dtype.is_numeric():
+        return "multiclass"
+    if n_unique <= 10:
+        values = s.cast(pl.Float64)
+        if bool((values == values.round(0)).all()):
+            return "multiclass"
+    return "regression"
+
+
 def plural(k, word, plural_form=None) -> str:
     return f"{k:,} {word if k == 1 else (plural_form or word + 's')}"
 

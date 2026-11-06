@@ -10,6 +10,16 @@ from .quality import (ColumnProfile, Contract, ContractError, ContractResult, Co
                       Issue, Profile, QualityGate, QualityGateError, QualityReport, QualityWarning,
                       SchemaDiff, ValidateContract, check_quality, compare_schemas, infer_schema,
                       profile)
+from . import features
+from .features import (DateTimeFeatures, DropLeakage, GroupAggregations, Interactions, LagFeatures,
+                       LeakageError, LeakageReport, SelectFeatures, TargetEncode, TextEmbeddings,
+                       default_feature_pipeline, detect_leakage)
+from . import automl as automl_module
+from .automl import AutoCluster, AutoML, TaskInfo, automl, available_models, detect_task
+from . import evaluation
+from .evaluation import (ErrorReport, EvaluationReport, Explanation, FairnessReport, ModelCard,
+                         error_analysis, evaluate_model, explain, fairness_report, model_card,
+                         partial_dependence)
 
 # Every function in steps.py works as a pipeline step by name, e.g. {"step": "normalize_unicode"}.
 register_function_namespace(_steps)

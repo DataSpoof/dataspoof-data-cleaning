@@ -295,7 +295,9 @@ class Impute(Step):
                  for c in self.state_["indicators"] if c in df.columns]
         if flags:
             df = df.with_columns(flags)
-        fills = [pl.col(c).fill_null(pl.lit(v).cast(df.schema[c], strict=False)).alias(c)
+        # An all-null batch column has dtype Null: fill it with the value's own type.
+        fills = [pl.col(c).fill_null(pl.lit(v) if df.schema[c] == pl.Null
+                                     else pl.lit(v).cast(df.schema[c], strict=False)).alias(c)
                  for c, v in self.state_["fill"].items() if c in df.columns]
         return df.with_columns(fills) if fills else df
 
@@ -349,14 +351,19 @@ class RemoveOutliers(Step):
     def _fit(self, df):
         return {"bounds": _learn_fences(df, self.params["columns"], "iqr", self.params["k"], 0, 1)}
 
-    def _transform(self, df):
+    def row_mask(self, df):
         keep = None
         for c, (lo, hi) in self.state_["bounds"].items():
             if c not in df.columns:
                 continue
             inside = pl.col(c).is_null() | ((pl.col(c) >= lo) & (pl.col(c) <= hi))
             keep = inside if keep is None else keep & inside
-        return df.filter(keep) if keep is not None else df
+        if keep is None:
+            return pl.Series("_keep", [True] * df.height, dtype=pl.Boolean)
+        return df.select(keep.alias("_keep")).to_series()
+
+    def _transform(self, df):
+        return df.filter(self.row_mask(df))
 
 
 @register_step
@@ -521,6 +528,7 @@ class DropDuplicates(Step):
 
     name = "drop_duplicates"
     fit_only = True
+    uses_target = True     # a duplicate is the whole row, label included
 
     def __init__(self, *, subset=None, keep="first", fit_only=None):
         super().__init__(fit_only=fit_only, subset=subset, keep=keep)

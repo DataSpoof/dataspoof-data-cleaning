@@ -57,6 +57,7 @@ path, with the GIL released so it scales across cores.
 - Detects JSON-type columns
 - Detects and masks PII columns
 - Performs univariate, bivariate, and multivariate analysis (interactive dashboard)
+- Evaluates models: detailed metrics, SHAP explanations, error analysis, fairness checks and auto-generated model cards
 
 ---
 
@@ -300,6 +301,202 @@ ac.Pipeline.load("pipeline.json").transform(new_batch)   # raises if the batch b
 
 Use `on_fail="warn"` on either step to log a warning instead of stopping. The EDA dashboard's
 Overview tab is built on this module, so it shows the same score, weakest columns and issues.
+
+---
+
+## Feature engineering (`automatedcleaning.features`)
+
+Feature steps work like the cleaning steps: they learn in `fit`, replay in `transform`, and save
+as JSON. Give the pipeline a `target` so steps that need the label can use it:
+
+```python
+pipe = ac.Pipeline(
+    [*ac.default_cleaning_pipeline().steps, *ac.default_feature_pipeline("churned").steps],
+    target="churned",
+)
+train_features = pipe.fit_transform(train_df)       # model-ready numeric features + the label
+new_features = pipe.transform(new_df)               # the label isn't needed to predict
+```
+
+| Step | What it adds |
+|---|---|
+| `DateTimeFeatures` | year, month, day, weekday, quarter, weekend/month-start/month-end flags, hour, sine/cosine encodings, days elapsed |
+| `TargetEncode` | each category's average target value. Training rows are encoded **out-of-fold**, so a row never sees its own label |
+| `Interactions` | products and ratios of the most informative numeric columns |
+| `GroupAggregations` | per-group statistics such as `fare_mean_by_class` (never of the target) |
+| `LagFeatures` | time-series lags and rolling means, per entity, in time order |
+| `TextEmbeddings` | TF-IDF + SVD vectors (built in), or `method="sentence_transformers"` |
+| `SelectFeatures` | keep features by random-forest importance, mutual information or variance |
+| `DropLeakage` | detect and drop columns that leak the target |
+
+The default pipeline runs these steps in order:
+
+1. date/time features
+2. drop leaky columns
+3. text embeddings
+4. target encoding for columns with 16+ categories
+5. one-hot encoding for the rest
+6. feature selection
+
+`time_col="..."` adds lag features and turns off target encoding.
+
+**Target-aware pipelines:** with `target=`, ordinary steps never see the label. That means
+imputation can't invent labels, outlier clipping can't change them, and encoders can't encode
+them. Row-removing steps drop the same rows from the label, and the label can be absent at
+prediction time.
+
+**Leakage detection:** it scores every column on its own against the target. A column that
+predicts almost perfectly is usually recorded *after* the outcome (`refund_issued` when
+predicting churn), and such columns are flagged:
+
+```python
+report = ac.detect_leakage(df, "churned")
+print(report)            # [high] refund_issued: on its own it predicts 'churned' with cv roc_auc = 1.000 ...
+```
+
+---
+
+## AutoML (`automatedcleaning.automl`)
+
+```python
+model = ac.AutoML("churned", time_budget=120).fit(train_df)
+print(model.summary())               # task, metric, CV scheme, best model, best score per model
+model.leaderboard_                   # every trial with its score, std, time and parameters
+model.evaluate(test_df)              # accuracy, balanced accuracy, F1, ROC-AUC, log-loss (RMSE, MAE, R² for regression)
+model.predict(new_df)                # labels in their original form
+model.predict_proba(new_df)          # one proba_<class> column per class
+model.feature_importance()           # permutation importance
+model.save("churn_model/")           # directory: manifest.json + model.joblib + preprocess.json
+model = ac.AutoML.load("churn_model/")
+```
+
+`AutoML(target).fit(df)` works through these steps:
+
+1. **Detect the task.** Two values means binary; text, or up to 10 whole-number values, means
+   multiclass; anything else is regression. Rows sorted by a date column are treated as a time
+   series.
+2. **Pick a metric:** ROC-AUC, macro-F1 or RMSE.
+3. **Drop leaky columns.**
+4. **Clean and engineer features** with the target-aware pipelines above.
+5. **Cross-validate a baseline and every model.** The defaults are logistic/ridge regression,
+   histogram gradient boosting, random forest, extra trees, k-NN, and LightGBM and XGBoost if
+   installed. Folds are stratified, or time-ordered for time series.
+6. **Spend the rest of `time_budget` on random hyperparameter search** around the best model
+   families.
+7. **Try a soft-voting ensemble** of the top three families.
+8. **Refit the winner on all rows.**
+
+| Option | Default | Meaning |
+|---|---|---|
+| `time_budget` | 60 | seconds for the search (75% models, the rest ensemble + refit) |
+| `max_trials` | None | cap on model trials |
+| `metric` | auto | any scikit-learn scorer name, e.g. `"average_precision"` |
+| `cv` | 5 | number of folds |
+| `include` / `exclude` | all | model names, see `ac.available_models("binary")` |
+| `preprocess` | `"auto"` | `"auto"`, your own `Pipeline`, or `None` |
+| `ensemble` | True | try the voting ensemble |
+| `on_leakage` | `"drop"` | `drop`, `warn`, `raise` or `ignore` |
+| `time_col` | `"auto"` | a date column for time-ordered CV, or None to switch detection off |
+
+On Titanic, with the defaults and a 40-second budget, AutoML reaches 0.918 ROC-AUC and 83% accuracy
+on held-out rows.
+
+**Saved models:** a trained model can't be stored as JSON, so `model.joblib` uses joblib, the
+scikit-learn standard. Its SHA-256 is recorded in `manifest.json` and verified before loading,
+which catches corrupted or swapped files. Unpickling still runs code, so only load models from
+people you trust.
+
+### Clustering
+
+```python
+clusters = ac.AutoCluster(k_range=(2, 8)).fit(df)     # k-means and Gaussian mixtures, chosen by silhouette
+clusters.labels_                                      # one label per input row
+clusters.cluster_profiles(df)                         # size, share and averages per cluster
+ac.automl(df)                                         # no target -> AutoCluster; with target= -> AutoML
+```
+
+Optional extras: `pip install "AutomatedCleaning[automl]"` (LightGBM, XGBoost) and
+`pip install "AutomatedCleaning[embeddings]"` (sentence-transformers).
+
+---
+
+## Evaluation & explainability (`automatedcleaning.evaluation`)
+
+Every tool takes a fitted `AutoML` model (or any scikit-learn estimator plus `target=...`) and
+labelled data. Each is also a method on `AutoML`.
+
+```python
+model = ac.AutoML("Survived").fit(train)
+
+report = model.report(test)              # == ac.evaluate_model(model, test)
+print(report)                            # accuracy, F1, ROC-AUC, PR-AUC, MCC, log loss, Brier, ECE ...
+report.confusion_matrix                  # also: per_class, calibration, roc_curve, pr_curve
+report.confidence_intervals              # 95% bootstrap intervals for the headline metrics
+report.best_threshold("f1")              # threshold table for binary models -> best cut-off
+ac.evaluate_model(model, test, threshold=0.3)   # metrics at a different decision threshold
+```
+
+Regression reports give RMSE, MAE, median/max error, R², bias, MAPE/sMAPE, the residual
+distribution and the error for each range of the actual value.
+
+**SHAP explanations.** Shapley values are computed by the library itself, with no `shap` dependency. They work for any
+model, including AutoML's ensembles and preprocessing. With up to 8 features every
+coalition is evaluated (exact SHAP); otherwise antithetic permutation sampling is used. For every
+row `base_value + sum(values)` equals the model's output exactly.
+
+```python
+exp = model.explain(test, rows=100)      # == ac.explain(model, test)
+print(exp)                               # global importance (mean |SHAP|) + direction of effect
+exp.global_importance()                  # feature, mean_abs_shap, share, direction
+exp.explain_row(0)                       # "P(Survived = 1) = 0.27 (average 0.42): Pclass = 3 (-0.174), ..."
+exp.for_row(0)                           # contributions for one row, largest first
+exp.to_shap()                            # a shap.Explanation for shap's plots: pip install "AutomatedCleaning[explain]"
+ac.partial_dependence(model, test, "Fare")   # average prediction as one feature varies
+```
+
+**Error analysis** finds the worst predictions and the segments of the data where the model
+fails. A segment is a category, a quantile bin, missing values, or a pair of these. Each
+segment is tested against the rest of the data, with a Benjamini–Hochberg correction so random
+noise isn't flagged.
+
+```python
+errors = model.error_analysis(test)
+errors.problem_slices        # e.g. "region = east": error rate 31% (2.4x), q = 0.001
+errors.worst                 # most confident mistakes / largest errors, with their inputs
+errors.confusions            # most common actual -> predicted mistakes
+```
+
+**Fairness & bias checks.** These cover each sensitive attribute, intersections such as sex × age
+band, and *proxy* features that encode a sensitive attribute.
+
+```python
+fair = model.fairness(test, ["Sex", "Age"])      # numeric attributes are cut into quantile bands
+print(fair)            # selection rate, TPR, FPR, precision and accuracy per group, plus flags
+fair.passed            # False if any limit is exceeded
+fair["Sex"].groups     # the per-group table
+fair.proxies           # Cramér's V between every feature and each sensitive attribute
+```
+
+The checks cover demographic parity, disparate impact (four-fifths rule), equal opportunity,
+equalized odds, predictive parity and accuracy gaps. For regression, they compare error and bias
+across groups. The default limits are in `ac.evaluation.DEFAULT_LIMITS`; override them with
+`limits={...}`.
+
+**Model cards.** One call generates a full card in the standard layout (Mitchell et al.):
+- model details and training data;
+- the model-selection leaderboard;
+- held-out metrics with confidence intervals and calibration;
+- SHAP importance, error analysis and fairness;
+- the quality score of the evaluation data;
+- auto-written limitations and ethical considerations;
+- versions.
+
+```python
+card = model.model_card(test, sensitive=["Sex"], name="Titanic survival",
+                        intended_use="Teaching example; not for real decisions.", owners="Data team")
+card.save("model_card.html")     # self-contained page (light/dark); also .md and .json
+card.limitations                 # e.g. "Performs significantly worse on some segments: ..."
+```
 
 ---
 
