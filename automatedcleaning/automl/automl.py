@@ -12,7 +12,7 @@ import warnings
 import numpy as np
 import polars as pl
 
-from ..core import Pipeline
+from ..core import AutomatedCleaningWarning, Pipeline
 from ..features.leakage import LeakageError, detect_leakage
 from ._persist import load_artifact, save_artifact
 from .frame import infer_kinds, make_preprocessor, to_model_frame
@@ -238,7 +238,7 @@ class AutoML:
             if leaky and self.on_leakage == "raise":
                 raise LeakageError(report)
             if leaky and self.on_leakage == "warn":
-                warnings.warn(report.summary(), UserWarning, stacklevel=2)
+                warnings.warn(report.summary(), AutomatedCleaningWarning, stacklevel=2)
             if leaky and self.on_leakage == "drop":
                 self.dropped_leaky_ = leaky
                 df = df.drop(leaky)

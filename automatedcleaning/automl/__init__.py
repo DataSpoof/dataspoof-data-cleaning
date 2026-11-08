@@ -14,6 +14,19 @@ from .models import available_models
 from .tasks import TaskInfo, detect_task
 
 
+def load_model(path):
+    """Load any saved AutoML / AutoCluster model directory (the checksum is verified first)."""
+    import json
+    from pathlib import Path
+    manifest = json.loads((Path(path) / "manifest.json").read_text(encoding="utf-8"))
+    kind = manifest.get("kind")
+    if kind == "supervised":
+        return AutoML.load(path)
+    if kind == "clustering":
+        return AutoCluster.load(path)
+    raise ValueError(f"{path} is not a saved automatedcleaning model")
+
+
 def automl(df, target: str | None = None, **kwargs):
     """Fit ``AutoML(target)`` when a target is given, otherwise ``AutoCluster()``."""
     if target is None:
@@ -21,5 +34,5 @@ def automl(df, target: str | None = None, **kwargs):
     return AutoML(target, **kwargs).fit(df)
 
 
-__all__ = ["AutoML", "AutoCluster", "automl", "detect_task", "TaskInfo", "available_models",
+__all__ = ["AutoML", "AutoCluster", "automl", "load_model", "detect_task", "TaskInfo", "available_models",
            "DEFAULT_METRICS"]

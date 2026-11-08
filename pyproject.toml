@@ -7,7 +7,7 @@ build-backend = "maturin"
 # This is the SAME project as "AutomatedCleaning" — `pip install AutomatedCleaning`
 # still works because pip normalizes names case-insensitively.
 name = "automatedcleaning"
-version = "1.13.0"
+version = "1.14.0"
 description = "Automated Data Cleaning Library with a Rust compute backend"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -65,10 +65,41 @@ automl = [
 explain = [
     "shap>=0.45",
 ]
+# Ingestion connectors. Cloud storage (S3/GCS/Azure) needs nothing extra (Polars reads it natively).
+sql = [
+    "sqlalchemy>=2.0",          # plus your database's driver, e.g. psycopg, pymysql, pyodbc, oracledb
+]
+excel = [
+    "fastexcel>=0.11",
+]
+snowflake = [
+    "snowflake-connector-python[pandas]>=3.0",
+]
+bigquery = [
+    "google-cloud-bigquery>=3.0",
+    "google-cloud-bigquery-storage>=2.0",
+]
+# ONNX export (deploy.export_model(format="onnx")) and checking it with ONNX Runtime.
+onnx = [
+    "skl2onnx>=1.17",
+    "onnxruntime>=1.17",
+]
+# Production WSGI servers for the REST API (gunicorn on Linux/macOS, waitress on Windows).
+serve = [
+    "gunicorn>=22.0; platform_system != 'Windows'",
+    "waitress>=3.0; platform_system == 'Windows'",
+]
+# LLM-written executive narratives (insights_report(..., llm=True)) with Claude.
+llm = [
+    "anthropic>=2.5",
+]
 # Neural text embeddings for TextEmbeddings(method="sentence_transformers").
 embeddings = [
     "sentence-transformers>=2.0",
 ]
+
+[project.scripts]
+automatedcleaning = "automatedcleaning.deploy.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

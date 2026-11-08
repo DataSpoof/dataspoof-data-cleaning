@@ -20,7 +20,7 @@ import numpy as np
 import polars as pl
 
 from .._detect import is_num, is_temporal, tokens
-from ..core import Step, register_step
+from ..core import AutomatedCleaningWarning, Step, register_step
 from .selection import target_vector
 
 
@@ -211,7 +211,7 @@ class DropLeakage(Step):
         if flagged and p["on_detect"] == "warn":
             with warnings.catch_warnings():
                 warnings.simplefilter("always", UserWarning)
-                warnings.warn(report.summary(), UserWarning, stacklevel=5)
+                warnings.warn(report.summary(), AutomatedCleaningWarning, stacklevel=5)
         return {"target": target, "drop": flagged if p["on_detect"] == "drop" else [],
                 "findings": [dataclasses.asdict(f) for f in report.findings]}
 

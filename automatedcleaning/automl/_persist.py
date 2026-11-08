@@ -23,7 +23,7 @@ from pathlib import Path
 
 import polars as pl
 
-from ..core import Pipeline
+from ..core import AutomatedCleaningWarning, Pipeline
 from ..quality.checks import jsonable
 
 FORMAT = "dataspoof.automl"
@@ -85,7 +85,7 @@ def load_artifact(path, kind: str):
     current = versions().get("scikit-learn")
     if saved and current and saved != current:
         warnings.warn(f"Model was trained with scikit-learn {saved}; you have {current}. "
-                      f"Predictions may differ or loading may fail.", UserWarning, stacklevel=3)
+                      f"Predictions may differ or loading may fail.", AutomatedCleaningWarning, stacklevel=3)
     model = joblib.load(model_path)
     preprocess = Pipeline.load(path / PREPROCESS_FILE) if (path / PREPROCESS_FILE).exists() else None
     return manifest, model, preprocess

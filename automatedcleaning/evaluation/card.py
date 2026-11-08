@@ -540,7 +540,7 @@ ul{margin:8px 0;padding-left:20px}li{margin:4px 0}li.warn{color:var(--warn)}
 """
 
 
-def _render_html(title: str, blocks) -> str:
+def _render_html(title: str, blocks, doc_kind: str = "Model card") -> str:
     parts, open_section = [], False
 
     def close():
@@ -597,5 +597,5 @@ def _render_html(title: str, blocks) -> str:
     close()
     return ("<!doctype html><html lang=en><head><meta charset=utf-8>"
             "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
-            f"<title>{html.escape(title)} · Model card</title><style>{_CSS}</style></head><body><main>"
+            f"<title>{html.escape(title)} · {html.escape(doc_kind)}</title><style>{_CSS}</style></head><body><main>"
             f"<header><h1>{html.escape(title)}</h1>{''.join(intro)}</header>{''.join(parts)}</main></body></html>")

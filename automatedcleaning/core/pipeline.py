@@ -41,7 +41,15 @@ class SchemaMismatchError(ValueError):
     """Input to ``transform`` doesn't match the training schema (policy ``"raise"``)."""
 
 
-class PipelineWarning(UserWarning):
+class AutomatedCleaningWarning(UserWarning):
+    """Base category for every warning this library issues (filter them all with this class)."""
+
+
+class ServiceWarning(AutomatedCleaningWarning, RuntimeWarning):
+    """An optional external service (LLM, alert webhook) failed; a fallback was used."""
+
+
+class PipelineWarning(AutomatedCleaningWarning):
     """Warning category for pipeline problems such as schema drift."""
 
 

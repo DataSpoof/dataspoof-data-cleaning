@@ -1,101 +1,240 @@
+<a id="top"></a>
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/images/logo.png" alt="AutomatedCleaning logo" width="260">
+
 # AutomatedCleaning
 
-**AutomatedCleaning** is a Python library for automated data cleaning, now powered by a
-**Rust compute backend**. It preprocesses and analyzes datasets — handling missing values,
-outliers, spelling corrections, text cleaning, PII masking and more — while the CPU-heavy
-work runs in compiled Rust for speed and true (GIL-free) parallelism.
+### From raw data to a monitored production model — automated, explainable, auditable.
 
-![Logo](https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/images/logo.png)
+[![PyPI](https://img.shields.io/pypi/v/AutomatedCleaning?color=2f6fde&label=PyPI)](https://pypi.org/project/AutomatedCleaning/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Rust engine](https://img.shields.io/badge/engine-Rust-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Polars](https://img.shields.io/badge/dataframes-Polars-CD792C?logo=polars&logoColor=white)](https://pola.rs/)
+[![Tests](https://img.shields.io/badge/tests-183%20passing-2ea44f)](#%EF%B8%8F-building--contributing)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](#-license)
 
----
+**[Install](#-installation)** ·
+**[Quick start](#-quick-start)** ·
+**[Modules](#-the-platform-at-a-glance)** ·
+**[Contents](#-contents)** ·
+**[Why Rust?](#-why-rust--python)**
 
-## Why Rust + Python?
-
-The library is a **hybrid**: a friendly Python API on top, a fast Rust engine underneath.
-
-- 🐍 **Python frontend** — the API you call, plus everything that leans on the Python
-  ecosystem (Polars I/O, scikit-learn imputation, Plotly dashboards, Presidio PII, Claude AI).
-- 🦀 **Rust backend** (`automatedcleaning._rustcore`) — the number-crunching and per-row
-  string work: text preprocessing, symbol stripping, IQR outliers, skewness, correlation,
-  multicollinearity and JSON detection.
-
-You install one wheel and write normal Python — the Rust is invisible.
-
-```
-┌─────────────────────────── your code ───────────────────────────┐
-│  import automatedcleaning as ac                                  │
-│  df = ac.load_data("data.csv"); ac.clean_data(df)                │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │ calls
-┌──────────────────────────────▼──────────────────────────────────┐
-│  Python frontend  (automatedcleaning/cleaning.py)                │
-│    Polars • scikit-learn • Plotly • Presidio • LangChain         │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │ delegates hot loops
-┌──────────────────────────────▼──────────────────────────────────┐
-│  🦀 Rust backend  (_rustcore, built with PyO3 + rayon)           │
-│    text cleaning • skewness • IQR • correlation • JSON detect     │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-**Benchmark** — text preprocessing over 50,000 rows: **~3.8× faster** than the pure-Python
-path, with the GIL released so it scales across cores.
+</div>
 
 ---
 
-## Features
+AutomatedCleaning automates the whole data-science lifecycle in one Python library. It covers
+ingestion and cleaning, data quality, feature engineering, AutoML, explainability and fairness,
+the model registry, deployment, monitoring, and plain-English insights. A **Rust engine**
+handles the heavy computation, and every stage shares one `fit` / `transform` / `save` contract.
 
-- Supports both large (100+ GB) and small datasets
-- Detects and handles missing values and duplicate records
-- Identifies and corrects spelling errors in categorical values
-- Detects and removes outliers (IQR)
-- Detects and fixes data imbalance
-- Identifies and corrects skewness in numerical data
-- Checks for correlation and detects multicollinearity
-- Analyzes cardinality in categorical columns
-- Identifies and cleans text columns
-- Detects JSON-type columns
-- Detects and masks PII columns
-- Performs univariate, bivariate, and multivariate analysis (interactive dashboard)
-- Evaluates models: detailed metrics, SHAP explanations, error analysis, fairness checks and auto-generated model cards
-
----
-
-## Installation
-
-### From PyPI (recommended)
+## ⚡ Quick start
 
 ```bash
 pip install AutomatedCleaning
 ```
 
-Prebuilt **abi3 wheels** are published for Linux, macOS and Windows and work on
-**CPython 3.11+** — no Rust toolchain needed to install. The import name is also
-`automatedcleaning` (`import automatedcleaning as ac`).
+```python
+import automatedcleaning as ac
 
-### From source
-
-Building from source requires the **Rust toolchain** (because the backend is compiled):
-
-```bash
-# 1. Install Rust (https://rustup.rs) and maturin
-pip install maturin
-
-# 2. Clone and build
-git clone https://github.com/DataSpoof/dataspoof-data-cleaning.git
-cd dataspoof-data-cleaning
-
-# Build & install into the current environment
-pip install .
-
-# --- or, for development (needs an active virtualenv) ---
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-maturin develop --release
+df = ac.read("titanic.csv")                                       # 1. ingest
+train, test = df.head(700), df.tail(191)
+print(ac.check_quality(train).grade)                              # 2. data-quality score
+model = ac.AutoML("Survived", time_budget=60).fit(train)          # 3. clean + features + AutoML
+print(model.report(test))                                         # 4. held-out metrics
+model.model_card(test, sensitive=["Sex"]).save("model_card.html") # 5. model card + fairness
+registry = ac.ModelRegistry("registry")
+version = registry.register(model, "titanic")                     # 6. version it...
+registry.promote("titanic", version.version, "production")        #    ...and promote it
+predictions = ac.score(registry.load("titanic"), test)            # 7. score (or ac.serve / build_docker)
+monitor = ac.Monitor(model, reference=test)                       # 8. watch for drift & decay
+print(ac.insights_report(df, "Survived").narrative)               # 9. plain-English insights
 ```
+
+What that gives you:
+- **Held-out metrics** with 95% confidence intervals.
+- **A model card** (HTML) with SHAP drivers, error analysis and a fairness review.
+- **A versioned production model** whose checksum is verified when it loads.
+- **A drift monitor** for new data.
+- **Plain-English findings**, such as *"The rate of Survived = 1 is 19% when Sex is male, vs 74%
+  otherwise"*.
+
+Prefer to clean interactively? `ac.clean_data(ac.load_data("data.csv"))` walks you through it
+and builds an EDA dashboard.
 
 ---
 
-## Quick start
+## 🧭 The platform at a glance
+
+| | Stage | Module | What it automates |
+|:-:|---|---|---|
+| 📥 | **Ingestion & connectors** | `ingestion` | Files, globs, URLs, S3 / GCS / Azure, any SQL database, Snowflake, BigQuery and REST APIs. Includes schema inference and incremental loads. |
+| 🧹 | **Data cleaning** | `cleaners`, `steps` | 50+ cleaning steps: missing values, outliers, text, dates, PII, duplicates, encodings. Rules are learned on training data and replayed exactly. |
+| 📊 | **Profiling & quality** | `quality` | Automated EDA, a 0–100 quality score, YAML data contracts, schema-drift checks and quality gates. |
+| 🧬 | **Feature engineering** | `features` | Dates, out-of-fold target encoding, interactions, aggregations, lags, text embeddings, selection and **leakage detection**. |
+| 🤖 | **AutoML** | `automl` | Detects the task, runs a time-budgeted model search, builds an ensemble, and also does clustering. |
+| 🔍 | **Evaluation & explainability** | `evaluation` | Metrics with confidence intervals, calibration, **SHAP**, error analysis, **fairness and bias** checks, and **model cards**. |
+| 🗂️ | **Tracking & registry** | `registry` | Experiment runs and dataset fingerprints. Models move dev → staging → production, with metric gates and rollback. |
+| 🚀 | **Deployment** | `deploy` | Batch scoring, a REST API, ONNX and pickle export, **Docker images**, and a CLI. |
+| 📡 | **Monitoring** | `monitoring` | Data and prediction drift, accuracy decay, alerts and webhooks, and champion-vs-challenger **retraining**. |
+| 💡 | **Insights & reporting** | `insights` | Significance-tested findings, executive reports, and an optional narrative written by **Claude**. |
+
+```
+   ingest ─▶ clean ─▶ profile & quality ─▶ features ─▶ AutoML ─▶ evaluate & explain
+                                                                        │
+   insights ◀─ monitor ◀──── deploy ◀──── registry & tracking ◀─────────┘
+                  │                                             ▲
+                  └──── drift / accuracy decay ─▶ retrain ──────┘
+```
+
+**Built for production, not just notebooks:**
+- **Reproducible:** pipelines learn on training data and replay exactly on new data. They save
+  as reviewable **JSON**, never pickle.
+- **Auditable:** every run records its parameters, data fingerprints, git commit, user and
+  timings. Every promotion is logged.
+- **Safe by default:**
+  - SQL values are always bound as parameters, so inputs can't inject SQL.
+  - Secrets are redacted everywhere.
+  - Model files are checksummed.
+  - The REST API supports API keys.
+  - Docker images run as a non-root user.
+- **Private:** drift monitors store binned statistics, not your rows. The LLM only ever sees
+  aggregated findings.
+
+---
+
+## 📚 Contents
+
+1. [Ingestion & connectors](#-1--ingestion--connectors)
+2. [Data cleaning](#-2--data-cleaning)
+3. [Profiling & data quality](#-3--profiling--data-quality)
+4. [Feature engineering](#-4--feature-engineering)
+5. [AutoML](#-5--automl)
+6. [Evaluation & explainability](#-6--evaluation--explainability)
+7. [Experiment tracking & model registry](#%EF%B8%8F-7--experiment-tracking--model-registry)
+8. [Deployment](#-8--deployment)
+9. [Monitoring](#-9--monitoring)
+10. [Insights & reporting](#-10--insights--reporting)
+
+Also: [Installation](#-installation) · [Why Rust + Python?](#-why-rust--python) ·
+[Requirements](#-requirements) · [Building & contributing](#%EF%B8%8F-building--contributing) ·
+[License](#-license)
+
+---
+
+## 📦 Installation
+
+```bash
+pip install AutomatedCleaning                    # core library
+pip install "AutomatedCleaning[sql,excel]"       # + any extras you need (see below)
+```
+
+The import name is `automatedcleaning` (`import automatedcleaning as ac`). It needs
+**Python 3.11+**.
+
+> **Platform note:** PyPI currently has a prebuilt wheel for **Windows**. On Linux and macOS,
+> including Colab, `pip` builds from source and needs the Rust toolchain
+> (`curl https://sh.rustup.rs -sSf | sh`). The included GitHub Actions workflow builds wheels
+> for every platform.
+
+| Extra | Adds | For |
+|---|---|---|
+| `sql` | SQLAlchemy (plus your database's driver) | PostgreSQL, MySQL, SQL Server, Oracle, Redshift… |
+| `excel` | fastexcel | `.xlsx` / `.xls` files |
+| `snowflake` / `bigquery` | native warehouse connectors | Snowflake, BigQuery |
+| `automl` | LightGBM, XGBoost | extra AutoML model families |
+| `embeddings` | sentence-transformers | neural text embeddings |
+| `explain` | shap | shap's own plots from `Explanation.to_shap()` |
+| `onnx` | skl2onnx, onnxruntime | ONNX export |
+| `serve` | gunicorn / waitress | production REST serving |
+| `llm` | anthropic | Claude-written executive narratives |
+| `text` | langdetect, better-profanity, pyspellchecker | language / profanity / spelling steps |
+
+<details>
+<summary><b>Install from source</b></summary>
+
+```bash
+pip install maturin                               # needs Rust: https://rustup.rs
+git clone https://github.com/DataSpoof/dataspoof-data-cleaning.git
+cd dataspoof-data-cleaning
+pip install .                                     # or: maturin develop --release (in a virtualenv)
+```
+
+</details>
+
+---
+
+## 📥 1 · Ingestion & connectors
+
+`ac.read()` reads from any supported source and returns a Polars DataFrame. `ac.ingest()` also
+infers types, validates the data and records where it came from.
+
+```python
+ac.read("sales.csv")                                   # csv, tsv, parquet, json, ndjson, excel, arrow, avro, .csv.gz
+ac.read("data/2024-*.parquet", include_source=True)    # globs -> one table (+ _source_file column)
+ac.read("https://example.com/export.csv")
+ac.read("s3://bucket/sales/*.parquet", storage_options={"aws_region": "eu-west-1"})   # also gs://, az://, abfss://
+ac.read("postgresql+psycopg://user:pass@host/db", query="SELECT * FROM orders WHERE region = :r",
+        params={"r": "EU"})
+ac.read("sqlite:///shop.db", table="orders")
+
+result = ac.ingest("sales.csv", name="sales", contract="sales.contract.yaml", quality=True)
+result.data                 # typed DataFrame: "1,200" -> 1200.0, "2024-01-05" -> date, "yes" -> True
+print(result)               # rows, inferred types, contract result, quality score
+result.fingerprint          # shape + schema + content hash (also logged with ingest(..., run=run))
+```
+
+**Connectors:**
+- **Cloud storage:** S3, GCS and Azure are read natively by Polars, with no extra packages.
+  Credentials come from `storage_options` or the standard environment variables.
+- **Databases:** `SQLSource` takes any SQLAlchemy URL (PostgreSQL, MySQL, SQL Server, Oracle,
+  Redshift, DuckDB, …) or any DB-API connection. Install with
+  `pip install "AutomatedCleaning[sql]"` plus your database's driver.
+- **Warehouses:** `SnowflakeSource` (`[snowflake]`) and `BigQuerySource` (`[bigquery]`) use the
+  native connectors and fetch results as Arrow.
+- **APIs:** `RESTSource` handles token auth (pass the token, or read it from an environment
+  variable), and every pagination style: page, offset, cursor, next-URL and `Link` header. It
+  retries 429 and 5xx responses with back-off and `Retry-After`, supports rate limiting, and
+  flattens nested JSON into columns.
+
+**Safety:**
+- Values are always bound as query parameters (write `:name`), and table and column names are
+  quoted, so inputs can't inject SQL.
+- Passwords and tokens are redacted from every repr and report.
+- An API never follows a next-page link to another host, so your token can't leak there.
+
+```python
+api = ac.RESTSource("https://api.example.com/v1", token_env="EXAMPLE_TOKEN", rate_limit=5)
+orders = api.fetch("orders", records="data", pagination="cursor",
+                   cursor_param="after", cursor_path="meta.next_cursor")
+```
+
+**Incremental loads** read only what is new since the last successful load. The state is saved
+only after your code has processed the batch, so a crash re-delivers the rows instead of
+dropping them. If two runners try to commit, the second gets an error rather than overwriting.
+
+```python
+loader = ac.IncrementalLoader(ac.SQLSource(url), table="orders", cursor="updated_at",
+                              key="order_id", state="state/orders.json")
+with loader.batch() as new_rows:          # rows past the saved watermark; late rows with the
+    append_to_warehouse(new_rows)         # same timestamp are caught and de-duplicated by key
+
+files = ac.IncrementalLoader(files="landing/**/*.csv", state="state/landing.json")
+files.run(lambda df: df.write_parquet("bronze/batch.parquet"))   # only new or changed files
+```
+
+Types are learned from the first batch and then reused, so every later batch has the same
+schema.
+
+<p align="right"><a href="#top">back to top ↑</a></p>
+
+---
+
+## 🧹 2 · Data cleaning
+
+### Interactive cleaning
 
 ```python
 import automatedcleaning as ac
@@ -111,9 +250,7 @@ df_cleaned = ac.clean_data(df, background_image_path="assets/gradient.png")
 questions (column spelling fixes, categorical corrections, target column for imbalance).
 It writes `cleaned_data.csv` and an EDA dashboard to `output/eda/dashboard.html`.
 
----
-
-## Pipelines: fit once, apply anywhere (recommended for production)
+### Pipelines: fit once, apply anywhere (recommended for production)
 
 `clean_data()` is interactive and re-learns everything from whatever data it is given. For
 scheduled jobs, train/test splits and production scoring, use a **pipeline** instead. It asks
@@ -200,9 +337,92 @@ pipe = ac.Pipeline.from_config("cleaning.yaml")
 - **Extensible:** subclass `ac.Step` and decorate it with `@ac.register_step` to add your own
   steps; they work in configs and in saved pipelines like the built-in ones.
 
+### Individual cleaning functions
+
+Every stage is also a standalone function you can call directly — useful for scripting or
+building your own non-interactive pipeline. These delegate to the Rust backend:
+
+```python
+import polars as pl
+import automatedcleaning as ac
+
+df = ac.load_data("dataset.csv")
+
+df = ac.detect_column_types_and_process_text(df)  # classify + clean text columns (Rust)
+df = ac.handle_negative_values(df)                # negatives -> absolute values (Rust)
+df = ac.replace_symbols(df)                       # strip $ ₹ , - •  (Rust)
+df = ac.handle_missing_values(df)                 # KNN impute + mode fill (Python/sklearn)
+df = ac.handle_duplicates(df)                     # drop duplicate rows (Polars)
+df = ac.remove_outliers(df)                       # IQR outlier removal (Rust)
+df = ac.fix_skewness(df)                          # log-transform skewed columns (Rust)
+df = ac.check_multicollinearity(df, threshold=0.7)# drop correlated features (Rust)
+df, cardinality = ac.check_cardinality(df)        # report + drop constant columns
+df = ac.fix_json_columns(df)                      # expand JSON columns (Rust detection)
+df = ac.detect_and_mask_pii_polars(df)            # detect + mask PII (Presidio)
+ac.generate_dashboard(df)                         # Plotly EDA dashboard
+ac.save_cleaned_data(df, "cleaned_data.csv")
+```
+
+#### Text preprocessing on its own
+
+```python
+ac.preprocess_text("I can't wait!! Visit https://x.co @bob 😀 it's GR8")
+# -> 'cannot wait visit'
+```
+
+<details>
+<summary><b>All additional cleaning steps (<code>automatedcleaning.steps</code>)</b></summary>
+
+
+Beyond the core pipeline, ~45 focused, composable steps are available directly
+on `ac.*`. String-heavy ones (whitespace, Unicode NFKC, mojibake, disguised-missing,
+booleans) run in the Rust backend.
+
+```python
+df = ac.standardize_column_names(df)          # trim/lowercase/snake_case/de-dupe
+df = ac.drop_empty_rows_and_columns(df)
+df = ac.drop_high_missing_columns(df, 0.5)
+df = ac.remove_duplicate_columns(df)
+df = ac.drop_id_like_columns(df)
+df = ac.replace_disguised_missing(df, numeric_sentinels=[999, -1])  # "NA","?"… -> null (Rust)
+df = ac.add_missing_indicators(df)
+df = ac.impute_missing(df, numeric_strategy="mice")   # mean|median|knn|mice|interpolate|ffill|bfill
+df = ac.normalize_whitespace(df)              # Rust
+df = ac.normalize_unicode(df)                 # NFKC + control-char strip (Rust)
+df = ac.fix_mojibake(df)                       # "Ã©" -> "é" (Rust)
+df = ac.standardize_casing(df, {"name": "title"})
+df = ac.parse_dates(df, ["signup"])           # -> native datetime
+df = ac.extract_date_parts(df, ["signup"])    # year/month/day/weekday/quarter
+df = ac.normalize_booleans(df, ["active"])    # yes/no/Y/N/1/0 -> bool (Rust)
+df = ac.downcast_numeric(df)                  # int64->int32, etc.
+df = ac.group_rare_categories(df, 0.01)
+df = ac.fuzzy_cluster_categories(df)          # merge "New York"/"newyork" (rapidfuzz)
+df = ac.encode_categorical(df, "onehot")      # onehot|label|frequency|ordinal|target
+df = ac.remove_outliers_zscore(df)            # + _mad, _isolation_forest, _by_group
+df = ac.winsorize(df)                          # cap instead of drop
+df = ac.fuzzy_deduplicate(df, ["name","email"])
+df = ac.scale_numeric(df, "standard")         # minmax|standard|robust
+df = ac.bin_numeric(df, ["age"], bins=5)
+df = ac.apply_range_rules(df, {"age": (0, 120)}, action="clip")
+df = ac.validate_formats(df, {"email": "email", "phone": "phone"})
+df = ac.normalize_phone_numbers(df, ["phone"], region="US")   # -> E.164
+df = ac.normalize_emails(df, ["email"]); df = ac.canonicalize_urls(df, ["site"])
+```
+
+Steps that need optional libraries (`detect_language`, `redact_profanity`,
+`correct_spelling_text`) are installed via the extra:
+
+```bash
+pip install "AutomatedCleaning[text]"
+```
+
+</details>
+
+<p align="right"><a href="#top">back to top ↑</a></p>
+
 ---
 
-## Profiling & data quality (`automatedcleaning.quality`)
+## 📊 3 · Profiling & data quality
 
 ### Automated EDA
 
@@ -302,9 +522,11 @@ ac.Pipeline.load("pipeline.json").transform(new_batch)   # raises if the batch b
 Use `on_fail="warn"` on either step to log a warning instead of stopping. The EDA dashboard's
 Overview tab is built on this module, so it shows the same score, weakest columns and issues.
 
+<p align="right"><a href="#top">back to top ↑</a></p>
+
 ---
 
-## Feature engineering (`automatedcleaning.features`)
+## 🧬 4 · Feature engineering
 
 Feature steps work like the cleaning steps: they learn in `fit`, replay in `transform`, and save
 as JSON. Give the pipeline a `target` so steps that need the label can use it:
@@ -354,9 +576,11 @@ report = ac.detect_leakage(df, "churned")
 print(report)            # [high] refund_issued: on its own it predicts 'churned' with cv roc_auc = 1.000 ...
 ```
 
+<p align="right"><a href="#top">back to top ↑</a></p>
+
 ---
 
-## AutoML (`automatedcleaning.automl`)
+## 🤖 5 · AutoML
 
 ```python
 model = ac.AutoML("churned", time_budget=120).fit(train_df)
@@ -418,9 +642,11 @@ ac.automl(df)                                         # no target -> AutoCluster
 Optional extras: `pip install "AutomatedCleaning[automl]"` (LightGBM, XGBoost) and
 `pip install "AutomatedCleaning[embeddings]"` (sentence-transformers).
 
+<p align="right"><a href="#top">back to top ↑</a></p>
+
 ---
 
-## Evaluation & explainability (`automatedcleaning.evaluation`)
+## 🔍 6 · Evaluation & explainability
 
 Every tool takes a fitted `AutoML` model (or any scikit-learn estimator plus `target=...`) and
 labelled data. Each is also a method on `AutoML`.
@@ -498,105 +724,214 @@ card.save("model_card.html")     # self-contained page (light/dark); also .md an
 card.limitations                 # e.g. "Performs significantly worse on some segments: ..."
 ```
 
+<p align="right"><a href="#top">back to top ↑</a></p>
+
 ---
 
-## Using individual steps
+## 🗂️ 7 · Experiment tracking & model registry
 
-Every stage is also a standalone function you can call directly — useful for scripting or
-building your own non-interactive pipeline. These delegate to the Rust backend:
-
-```python
-import polars as pl
-import automatedcleaning as ac
-
-df = ac.load_data("dataset.csv")
-
-df = ac.detect_column_types_and_process_text(df)  # classify + clean text columns (Rust)
-df = ac.handle_negative_values(df)                # negatives -> absolute values (Rust)
-df = ac.replace_symbols(df)                       # strip $ ₹ , - •  (Rust)
-df = ac.handle_missing_values(df)                 # KNN impute + mode fill (Python/sklearn)
-df = ac.handle_duplicates(df)                     # drop duplicate rows (Polars)
-df = ac.remove_outliers(df)                       # IQR outlier removal (Rust)
-df = ac.fix_skewness(df)                          # log-transform skewed columns (Rust)
-df = ac.check_multicollinearity(df, threshold=0.7)# drop correlated features (Rust)
-df, cardinality = ac.check_cardinality(df)        # report + drop constant columns
-df = ac.fix_json_columns(df)                      # expand JSON columns (Rust detection)
-df = ac.detect_and_mask_pii_polars(df)            # detect + mask PII (Presidio)
-ac.generate_dashboard(df)                         # Plotly EDA dashboard
-ac.save_cleaned_data(df, "cleaned_data.csv")
-```
-
-### Text preprocessing on its own
+Both are plain directories of JSON files. There is no server to run, and they are easy to back
+up, diff or keep on a shared drive.
 
 ```python
-ac.preprocess_text("I can't wait!! Visit https://x.co @bob 😀 it's GR8")
-# -> 'cannot wait visit'
+tracker = ac.Tracker("ac_runs", experiment="titanic")
+with tracker.start_run("baseline") as run:           # ends "finished", or "failed" with the error
+    model = ac.AutoML("Survived").fit(train)
+    run.log_automl(model, train, test)               # params, CV + test metrics, dataset fingerprints,
+                                                     # leaderboard, the model and its model card
+    run.log_metric("custom", 0.9, step=1)            # anything else: log_params / log_artifact / set_tag
+
+tracker.runs()                                       # every run as a table (params, latest metrics)
+tracker.best_run("test_roc_auc")
+tracker.compare([run_a.id, run_b.id])
 ```
 
-## Additional cleaning steps (`automatedcleaning.steps`)
-
-Beyond the core pipeline, ~45 focused, composable steps are available directly
-on `ac.*`. String-heavy ones (whitespace, Unicode NFKC, mojibake, disguised-missing,
-booleans) run in the Rust backend.
+Each run records the git commit, the user and its timings. A dataset is recorded by its shape,
+schema and content hash, never by its rows.
 
 ```python
-df = ac.standardize_column_names(df)          # trim/lowercase/snake_case/de-dupe
-df = ac.drop_empty_rows_and_columns(df)
-df = ac.drop_high_missing_columns(df, 0.5)
-df = ac.remove_duplicate_columns(df)
-df = ac.drop_id_like_columns(df)
-df = ac.replace_disguised_missing(df, numeric_sentinels=[999, -1])  # "NA","?"… -> null (Rust)
-df = ac.add_missing_indicators(df)
-df = ac.impute_missing(df, numeric_strategy="mice")   # mean|median|knn|mice|interpolate|ffill|bfill
-df = ac.normalize_whitespace(df)              # Rust
-df = ac.normalize_unicode(df)                 # NFKC + control-char strip (Rust)
-df = ac.fix_mojibake(df)                       # "Ã©" -> "é" (Rust)
-df = ac.standardize_casing(df, {"name": "title"})
-df = ac.parse_dates(df, ["signup"])           # -> native datetime
-df = ac.extract_date_parts(df, ["signup"])    # year/month/day/weekday/quarter
-df = ac.normalize_booleans(df, ["active"])    # yes/no/Y/N/1/0 -> bool (Rust)
-df = ac.downcast_numeric(df)                  # int64->int32, etc.
-df = ac.group_rare_categories(df, 0.01)
-df = ac.fuzzy_cluster_categories(df)          # merge "New York"/"newyork" (rapidfuzz)
-df = ac.encode_categorical(df, "onehot")      # onehot|label|frequency|ordinal|target
-df = ac.remove_outliers_zscore(df)            # + _mad, _isolation_forest, _by_group
-df = ac.winsorize(df)                          # cap instead of drop
-df = ac.fuzzy_deduplicate(df, ["name","email"])
-df = ac.scale_numeric(df, "standard")         # minmax|standard|robust
-df = ac.bin_numeric(df, ["age"], bins=5)
-df = ac.apply_range_rules(df, {"age": (0, 120)}, action="clip")
-df = ac.validate_formats(df, {"email": "email", "phone": "phone"})
-df = ac.normalize_phone_numbers(df, ["phone"], region="US")   # -> E.164
-df = ac.normalize_emails(df, ["email"]); df = ac.canonicalize_urls(df, ["site"])
+reg = ac.ModelRegistry("ac_registry")
+v = reg.register(model, "titanic", run=run)          # -> v1, stage "dev"
+reg.promote("titanic", v.version, "staging")
+reg.promote("titanic", v.version, "production",
+            require={"test_roc_auc": 0.85},          # metric gates; failing ones raise PromotionError
+            must_beat_production="test_roc_auc")     # ...and it must beat the current production model
+model = reg.load("titanic")                          # the production model (checksum verified)
+reg.history("titanic")                               # who moved what, when and why
+reg.rollback("titanic")                              # restore the previous production version
 ```
 
-Steps that need optional libraries (`detect_language`, `redact_profanity`,
-`correct_spelling_text`) are installed via the extra:
+<p align="right"><a href="#top">back to top ↑</a></p>
+
+---
+
+## 🚀 8 · Deployment
+
+```python
+ac.score(model, df, keep=["id"])                                  # id + prediction + proba_<class>
+ac.batch_score(model, "big.csv", "scored.parquet", chunk_size=100_000)   # streams files of any size
+ac.serve(model, port=8000)                                        # REST API (development server)
+ac.export_model(model, "out/", format="bundle")                   # or "pickle" / "onnx"
+ac.build_docker(model, "build/", name="titanic", version="3")     # ready-to-build Docker context
+```
+
+**The REST API** is a standard WSGI app with no web framework needed. Its endpoints:
+- `GET /health`;
+- `GET /metadata`;
+- `POST /predict` with `{"records": [{...}, ...]}`, which returns predictions and class probabilities.
+
+Set `AC_API_KEY` to require an `X-API-Key` header, which is checked in constant time. Request
+sizes are capped. Errors return JSON, and internal errors never leak details. With
+`prediction_log="preds.jsonl"`, every request is logged for monitoring.
+
+In production, run `gunicorn automatedcleaning.deploy.wsgi:app` with `AC_MODEL_PATH` set. Use
+waitress on Windows, and install either with `pip install "AutomatedCleaning[serve]"`.
+
+**Docker.** `build_docker` writes a multi-stage Dockerfile: a non-root user, a health check,
+gunicorn, and the model baked in. The generated image has been built and tested end to end.
+
+**ONNX** (`pip install "AutomatedCleaning[onnx]"`) exports the trained estimator: linear models,
+random forests, extra trees and voting ensembles. Pass `sample=df` and the export is checked
+against the original model. HistGradientBoosting can't be exported yet because of an upstream
+skl2onnx limitation; the error says so.
+
+**The CLI** (also available as `python -m automatedcleaning.deploy`):
 
 ```bash
-pip install "AutomatedCleaning[text]"
+automatedcleaning serve  --model models/titanic --port 8000
+automatedcleaning score  --model models/titanic --input big.csv --output scored.parquet
+automatedcleaning --registry ac_registry docker --model titanic:production --out build/
+automatedcleaning --registry ac_registry monitor --model titanic --monitor monitor.json --input today.csv
 ```
 
----
-
-## Supported file formats
-
-`load_data()` reads `.csv`, `.tsv`, `.json`, and `.parquet` (Excel must be converted first).
+<p align="right"><a href="#top">back to top ↑</a></p>
 
 ---
 
-## Requirements
+## 📡 9 · Monitoring
+
+```python
+mon = ac.Monitor(model, reference=holdout, log_path="monitor.jsonl")
+mon.on_alert(ac.webhook_alert("https://hooks.slack.com/..."))    # or any callback(report, alerts)
+report = mon.check(todays_batch)       # include the target column when labels are available
+print(report)                          # alerts + "RETRAIN RECOMMENDED" when the policy says so
+mon.save("monitor.json")               # binned baselines only: no raw data leaves the training side
+mon.history()                          # every past check
+```
+
+Each check covers:
+- **data drift** per input column: PSI, Jensen–Shannon distance, a chi-square test, missing-rate
+  jumps and never-seen categories;
+- **prediction drift**;
+- **accuracy decay**, when the batch has labels: an AUC/accuracy drop, or an RMSE/MAE rise;
+- **schema breaks** and **batches too small** to judge.
+
+Thresholds are set with `RetrainPolicy(...)`. Data drift alone is also available as
+`ac.drift_report(reference, current)`.
+
+**Retraining:** `ac.retrain(model, new_train, holdout, registry=reg, name="titanic")` trains a
+challenger with the champion's settings and compares the two on the holdout. It registers the
+challenger and promotes it to staging only if it is better.
+`monitoring.retrain_if_needed(mon, batch, ...)` runs the check first and retrains only when
+needed.
+
+<p align="right"><a href="#top">back to top ↑</a></p>
+
+---
+
+## 💡 10 · Insights & reporting
+
+```python
+for insight in ac.find_insights(sales_df, "sales"):
+    print(insight)                     # e.g.
+# Average sales rose about 50% from Jan 2024 to Dec 2024 (steady monthly trend, R² 1.00).
+# sales is 19% lower when stock < 24 (average 104 vs 128 otherwise; 499 rows).
+
+report = ac.insights_report(sales_df, "sales", title="Q4 sales review")      # offline template summary
+report = ac.insights_report(sales_df, "sales", llm=True)                     # Claude writes the narrative
+report.save("sales_review.html")                                             # also .md / .json
+```
+
+**What it finds:**
+- segments that move the target up or down;
+- trends and sudden changes over time;
+- strong correlations;
+- concentration, such as "20% of stores produce 80% of revenue";
+- outliers and data-quality caveats;
+- with `model=...`, the model's own top drivers.
+
+Segment findings must pass a significance test corrected for multiple comparisons, and must cover
+enough rows. Every finding carries the numbers behind it.
+
+**The LLM narrative.** With `llm=True`, Claude (`claude-opus-5-5` by default) writes the executive
+summary:
+- It receives only the findings and their aggregate numbers, never raw rows.
+- It is told not to introduce numbers that aren't in the findings, and to describe associations
+  rather than causes.
+- It uses `ANTHROPIC_API_KEY` or an `ant auth login` profile.
+- Without credentials, or on any API error, the report falls back to the template summary with a
+  warning.
+- `llm=False` (the default) makes no network calls.
+
+Install the SDK with `pip install "AutomatedCleaning[llm]"`.
+
+<p align="right"><a href="#top">back to top ↑</a></p>
+
+---
+
+## 🦀 Why Rust + Python?
+
+The library is a **hybrid**: a friendly Python API on top, a fast Rust engine underneath.
+
+- 🐍 **Python frontend** — the API you call, plus everything that leans on the Python
+  ecosystem (Polars I/O, scikit-learn imputation, Plotly dashboards, Presidio PII, Claude AI).
+- 🦀 **Rust backend** (`automatedcleaning._rustcore`) — the number-crunching and per-row
+  string work: text preprocessing, symbol stripping, IQR outliers, skewness, correlation,
+  multicollinearity and JSON detection.
+
+You install one wheel and write normal Python — the Rust is invisible.
+
+```
+┌─────────────────────────── your code ───────────────────────────┐
+│  import automatedcleaning as ac                                  │
+│  df = ac.load_data("data.csv"); ac.clean_data(df)                │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ calls
+┌──────────────────────────────▼──────────────────────────────────┐
+│  Python frontend  (automatedcleaning/cleaning.py)                │
+│    Polars • scikit-learn • Plotly • Presidio • LangChain         │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ delegates hot loops
+┌──────────────────────────────▼──────────────────────────────────┐
+│  🦀 Rust backend  (_rustcore, built with PyO3 + rayon)           │
+│    text cleaning • skewness • IQR • correlation • JSON detect     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Benchmark** — text preprocessing over 50,000 rows: **~3.8× faster** than the pure-Python
+path, with the GIL released so it scales across cores.
+
+<p align="right"><a href="#top">back to top ↑</a></p>
+
+---
+
+## 🧾 Requirements
 
 - **Python** ≥ 3.11
-- Key runtime deps (installed automatically): `polars`, `pandas`, `numpy`, `pyarrow`,
-  `nltk`, `scikit-learn`, `matplotlib`, `seaborn`, `missingno`, `plotly`, `pyfiglet`,
-  `langchain-anthropic`, `presidio-analyzer`, `presidio-anonymizer`
-- The automatic categorical spell-correction step optionally uses the **Anthropic Claude API**
-  (you'll be prompted for a key); you can skip it or correct values manually.
+- These are installed automatically:
+  - data: `polars`, `pandas`, `numpy`, `pyarrow`
+  - modelling: `scikit-learn`, `nltk`
+  - charts: `plotly`, `matplotlib`, `missingno`, `pyfiglet`
+  - PII masking: `presidio-analyzer`, `presidio-anonymizer`
+  - validation and parsing: `rapidfuzz`, `phonenumbers`, `email-validator`, `python-dateutil`,
+    `pyyaml`
+  - LLM features: `langchain-anthropic`
+- Claude-powered features are optional: interactive categorical spell-correction and insight
+  narratives. They use your `ANTHROPIC_API_KEY`. Without it, both fall back to offline behaviour.
 
 ---
 
-## Building & contributing
+## 🛠️ Building & contributing
 
 The project uses **maturin** as its build backend (`pyproject.toml`). See
 [BUILD.md](https://github.com/DataSpoof/dataspoof-data-cleaning/blob/main/BUILD.md) for the full architecture and build/publish guide.
@@ -609,10 +944,19 @@ src/
   stats.rs            # skewness, IQR, correlation, multicollinearity
   clean.rs            # whitespace, Unicode, mojibake, booleans, placeholders
 automatedcleaning/
-  core/               # shared Step/Pipeline core (no imports from the rest of the package)
+  core/               # shared Step / Pipeline core (no imports from the rest of the package)
+  ingestion/          # files, cloud, SQL, warehouses, APIs, incremental loads
   cleaners.py         # stateful cleaning steps + default_cleaning_pipeline()
   steps.py            # 43 standalone cleaning functions
   cleaning.py         # interactive clean_data() pipeline and EDA dashboard
+  quality/            # profiling, quality score, contracts, schema checks
+  features/           # feature engineering + leakage detection
+  automl/             # AutoML + AutoCluster
+  evaluation/         # metrics, SHAP, error analysis, fairness, model cards
+  registry/           # experiment tracking + model registry
+  deploy/             # scoring, REST API, export, Docker, CLI
+  monitoring/         # drift, alerts, retraining
+  insights/           # findings, executive reports, LLM narratives
 tests/                # pytest suite
 ```
 
@@ -625,11 +969,11 @@ maturin develop --release --extras test
 pytest
 ```
 
-Cross-platform wheels are built and published to PyPI automatically via GitHub Actions
-(`.github/workflows/CI.yml`) on every tagged release (`vX.Y.Z`).
+The GitHub Actions workflow (`.github/workflows/CI.yml`) builds Linux, macOS and Windows wheels.
+Publishing them from CI needs PyPI Trusted Publishing to be set up for the repository.
 
 ---
 
-## License
+## 📄 License
 
 MIT © Abhishek Kumar Singh / [DataSpoof](https://github.com/DataSpoof)

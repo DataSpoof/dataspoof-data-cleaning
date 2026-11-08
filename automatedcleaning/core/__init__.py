@@ -13,7 +13,8 @@ Concepts
 Registry      config files refer to steps by name (``register_step``, ``register_function``).
 """
 
-from .pipeline import (FORMAT, FORMAT_VERSION, Pipeline, PipelineStepError, PipelineWarning,
+from .pipeline import (FORMAT, FORMAT_VERSION, AutomatedCleaningWarning, Pipeline, PipelineStepError,
+                       PipelineWarning, ServiceWarning,
                        RunReport, SchemaMismatchError, StepReport, make_step)
 from .registry import (available_steps, get_step_class, register_function,
                        register_function_namespace, register_step, resolve_function)
@@ -23,5 +24,5 @@ __all__ = [
     "Step", "FunctionStep", "Pipeline", "RunReport", "StepReport", "make_step",
     "register_step", "register_function", "register_function_namespace", "available_steps",
     "get_step_class", "resolve_function", "NotFittedError", "SchemaMismatchError",
-    "PipelineWarning", "PipelineStepError", "FORMAT", "FORMAT_VERSION",
+    "PipelineWarning", "PipelineStepError", "AutomatedCleaningWarning", "ServiceWarning", "FORMAT", "FORMAT_VERSION",
 ]

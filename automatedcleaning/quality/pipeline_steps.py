@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import warnings
 
-from ..core import Step, register_step
+from ..core import AutomatedCleaningWarning, Step, register_step
 from .checks import DIMENSIONS, check_quality
 from .contracts import Contract, ContractViolation
 
 
-class QualityWarning(UserWarning):
+class QualityWarning(AutomatedCleaningWarning):
     """Warning category for contract or quality-gate failures with ``on_fail="warn"``."""
 
 

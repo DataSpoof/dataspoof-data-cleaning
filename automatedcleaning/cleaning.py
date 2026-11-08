@@ -47,7 +47,12 @@ from . import _rustcore
 # === Setup & Logging Cleanup ===
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore")
-logging.getLogger().setLevel(logging.ERROR)
+# ...but never hide this library's own warnings (leakage, schema drift, failed services).
+from .core import AutomatedCleaningWarning as _ACWarning  # noqa: E402
+warnings.filterwarnings("default", category=_ACWarning)
+# Quiet noisy third-party loggers only; the application's own (root) logging is left alone.
+for _noisy in ("presidio-analyzer", "presidio_analyzer", "presidio-anonymizer", "presidio_anonymizer"):
+    logging.getLogger(_noisy).setLevel(logging.ERROR)
 nltk.download('punkt', quiet=True)
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)  # required by the WordNet lemmatizer
@@ -383,8 +388,25 @@ def fix_spelling_errors_in_columns(df):
     
     return df
 
-# Initialize logging
-logging.basicConfig(filename="corrections.log", level=logging.INFO, format="%(asctime)s - %(message)s")
+# Corrections log: opened lazily on the first correction (importing the library must not
+# create files or reconfigure the application's logging), and skipped if not writable.
+_corrections_log = logging.getLogger("automatedcleaning.corrections")
+
+
+def _log_correction(message, level=logging.INFO):
+    if not _corrections_log.handlers:
+        _corrections_log.propagate = False
+        _corrections_log.setLevel(logging.INFO)
+        try:
+            handler = logging.FileHandler("corrections.log", delay=True)
+            handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+        except OSError:
+            handler = logging.NullHandler()
+        _corrections_log.addHandler(handler)
+    try:
+        _corrections_log.log(level, message)
+    except OSError:
+        pass
 
 # System prompt for categorical value correction
 CATEGORICAL_CORRECTION_PROMPT = """
@@ -452,7 +474,7 @@ def fix_spelling_errors_in_categorical(df):
         # Log corrections
         for old_value, new_value in correction_map.items():
             if old_value != new_value:
-                logging.info(f"Column: {col} | '{old_value}' -> '{new_value}'")
+                _log_correction(f"Column: {col} | '{old_value}' -> '{new_value}'")
 
         df = df.with_columns(pl.col(col).replace(correction_map).alias(col))
     
@@ -473,7 +495,7 @@ def correct_categorical_values(model, column_name: str, values: list) -> list:
 
     # If response length is incorrect, return original values
     if len(corrected_values) != len(values):
-        logging.warning(f"Unexpected response format for column '{column_name}'. Received: {response.content}")
+        _log_correction(f"Unexpected response format for column '{column_name}'. Received: {response.content}", logging.WARNING)
         return values  # Return original values if there's an issue
 
     return corrected_values
