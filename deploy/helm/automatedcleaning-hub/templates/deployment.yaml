@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hub.fullname" . }}
+  labels: {{- include "hub.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: {{- include "hub.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "hub.selector" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "hub.serviceAccount" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: hub
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["automatedcleaning", "hub", "serve", "--host", "0.0.0.0", "--port", "8080", "--workers", "{{ .Values.workers }}"]
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - name: AC_HUB_DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: {{ include "hub.dbSecret" . }}, key: DATABASE_URL}
+            - {name: AC_HUB_ARTIFACTS, value: {{ .Values.artifacts.root | quote }}}
+            - {name: AC_HUB_MAX_ARTIFACT_MB, value: {{ .Values.maxArtifactMB | quote }}}
+            - {name: AC_OFFLINE, value: "1"}
+            {{- if .Values.oidc.issuer }}
+            - {name: AC_OIDC_ISSUER, value: {{ .Values.oidc.issuer | quote }}}
+            - {name: AC_OIDC_AUDIENCE, value: {{ .Values.oidc.audience | quote }}}
+            {{- if .Values.oidc.jwksUrl }}
+            - {name: AC_OIDC_JWKS_URL, value: {{ .Values.oidc.jwksUrl | quote }}}
+            {{- end }}
+            - {name: AC_HUB_GROUP_ROLES, value: {{ .Values.oidc.groupRoles | toJson | quote }}}
+            {{- end }}
+            {{- if .Values.modelPublicKey }}
+            - {name: AC_MODEL_PUBLIC_KEY, value: {{ .Values.modelPublicKey | quote }}}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            {{- if .Values.artifacts.persistence.enabled }}
+            - {name: artifacts, mountPath: /data}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.artifacts.persistence.enabled }}
+        - name: artifacts
+          persistentVolumeClaim: {claimName: {{ include "hub.fullname" . }}-artifacts}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

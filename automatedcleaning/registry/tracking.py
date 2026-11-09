@@ -9,6 +9,8 @@ Layout (plain files, easy to back up, diff or sync to object storage)::
 
 from __future__ import annotations
 
+from typing import Any
+
 import shutil
 import time
 import uuid
@@ -233,7 +235,7 @@ class Tracker:
                   params: dict | None = None) -> Run:
         exp = check_name(experiment or self.experiment, "experiment name")
         run_id = uuid.uuid4().hex
-        meta = {"run_id": run_id, "experiment": exp, "name": name or f"run-{run_id[:8]}", "status": "running",
+        meta: dict[str, Any] = {"run_id": run_id, "experiment": exp, "name": name or f"run-{run_id[:8]}", "status": "running",
                 "started_at": now(), "ended_at": None, "duration_seconds": None, "error": None,
                 "user": user(), "host": host(), "git": git_info(), "params": {}, "tags": dict(tags or {}),
                 "datasets": [], "artifacts": [], "_t0": time.time()}
@@ -299,7 +301,7 @@ class Tracker:
             keys += [f"param.{k}" for k in r.params if f"param.{k}" not in keys]
         for r in runs:
             keys += [f"metric.{k}" for k in r.metrics if f"metric.{k}" not in keys]
-        data = {"field": keys}
+        data: dict[str, list] = {"field": keys}
         for r in runs:
             vals = {**{f"param.{k}": v for k, v in r.params.items()}, **{f"metric.{k}": v for k, v in r.metrics.items()}}
             data[f"{r.name} ({r.id[:6]})"] = [None if vals.get(k) is None else str(vals.get(k)) for k in keys]

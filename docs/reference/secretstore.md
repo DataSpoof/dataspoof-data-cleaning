@@ -1,0 +1,3 @@
+# Secrets
+
+::: automatedcleaning.secretstore

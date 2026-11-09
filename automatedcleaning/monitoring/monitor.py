@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import dataclasses
 import datetime as _dt
 import json
@@ -52,6 +54,7 @@ class MonitorReport:
     performance: dict | None
     alerts: list
     retrain_recommended: bool
+    name: str | None = None
 
     @property
     def critical(self) -> list:
@@ -90,12 +93,13 @@ def _headline(metrics: dict, task: str) -> str:
 
 
 def webhook_alert(url: str, *, timeout: float = 5.0, headers: dict | None = None):
-    """An alert handler that POSTs each report (JSON) to ``url`` (Slack/Teams/PagerDuty relay …)."""
+    """An alert handler that POSTs each report (JSON) to ``url`` (Slack/Teams incoming webhooks,
+    or any HTTP endpoint). For incident tools see ``ops.pagerduty_alert`` / ``ops.opsgenie_alert``."""
     import urllib.request
 
     def send(report: MonitorReport, alerts: list):
         payload = {"text": report.summary().splitlines()[0], "alerts": [dataclasses.asdict(a) for a in alerts],
-                   "retrain_recommended": report.retrain_recommended, "time": report.time}
+                   "retrain_recommended": report.retrain_recommended, "time": report.time, "model": report.name}
         req = urllib.request.Request(url, data=json.dumps(jsonable(payload)).encode(), method="POST",
                                      headers={"Content-Type": "application/json", **(headers or {})})
         try:
@@ -118,15 +122,20 @@ class Monitor:
     """
 
     def __init__(self, model, reference=None, *, policy: RetrainPolicy | None = None, log_path=None,
-                 columns=None, reference_metrics: dict | None = None, name: str | None = None):
+                 columns=None, reference_metrics: dict | None = None, name: str | None = None,
+                 estimate_performance: bool = True):
         from ..deploy.scoring import resolve_model
         self.model = resolve_model(model)
         self.policy = policy or RetrainPolicy()
         self.log_path = Path(log_path) if log_path else None
         self.columns, self.name = columns, name
         self.reference_metrics = reference_metrics
-        self.baseline_ = self.prediction_baseline_ = None
-        self._handlers = []
+        self.baseline_: Baseline | None = None
+        self.prediction_baseline_: Any = None
+        self.estimate_performance = estimate_performance
+        self.estimator_: Any = None
+        self._handlers: list = []
+        self._check_handlers: list = []
         if reference is not None:
             self.fit(reference)
 
@@ -175,7 +184,70 @@ class Monitor:
         if self.reference_metrics is None:
             self.reference_metrics = self._metrics(df)
         self.reference_rows_ = df.height
+        target = getattr(self.model, "target", None)
+        if self.estimate_performance and self._supervised and target in df.columns:
+            from .estimate import PerformanceEstimator
+            try:                              # lets check() estimate performance before labels arrive
+                self.estimator_ = PerformanceEstimator(self.model).fit(df)
+            except ValueError:
+                self.estimator_ = None
         return self
+
+    def on_check(self, handler) -> "Monitor":
+        """Register ``handler(report)``; called after every check (e.g. ``ops.sql_sink(db)``)."""
+        self._check_handlers.append(handler)
+        return self
+
+    def check_labels(self, joined: pl.DataFrame, *, prediction: str = "prediction", label: str = "label") -> dict:
+        """Live performance from predictions that were actually served and their ground truth
+        (see ``monitoring.ops.join_labels``), compared with the reference metrics. Raises the
+        same ``performance`` alerts as :meth:`check` and calls the alert handlers."""
+        from sklearn import metrics as m
+        if joined.height == 0:
+            raise ValueError("No labelled predictions to evaluate yet.")
+        y_pred, y_true = joined[prediction].to_list(), joined[label].to_list()
+        if self._task == "regression":
+            yp, yt = np.asarray(y_pred, dtype=float), np.asarray(y_true, dtype=float)
+            current = {"rmse": float(np.sqrt(np.mean((yp - yt) ** 2))), "mae": float(np.mean(np.abs(yp - yt))),
+                       "r2": float(m.r2_score(yt, yp))}
+            metric = "rmse"
+        else:
+            yp_s, yt_s = [str(v) for v in y_pred], [str(v) for v in y_true]
+            current = {"accuracy": float(m.accuracy_score(yt_s, yp_s)),
+                       "balanced_accuracy": float(m.balanced_accuracy_score(yt_s, yp_s)),
+                       "f1_macro": float(m.f1_score(yt_s, yp_s, average="macro", zero_division=0))}
+            metric = "accuracy"
+        ref = (self.reference_metrics or {}).get(metric)
+        alerts: list = []
+        out: dict = {"rows": joined.height, "metrics": current, "metric": metric, "reference": ref,
+                     "current": current[metric], "alerts": alerts}
+        if ref is not None:
+            pol = self.policy
+            if metric in _LOWER_BETTER:
+                change = (current[metric] - ref) / ref if ref else 0.0
+                bad, msg = change > pol.max_error_increase, f"live {metric} rose {change:.0%} ({ref:.4g} -> {current[metric]:.4g})"
+            else:
+                change = current[metric] - ref
+                bad, msg = -change > pol.max_metric_drop, f"live {metric} fell {-change:.3f} ({ref:.4f} -> {current[metric]:.4f})"
+            out["change"] = round(change, 6)
+            if bad:
+                alerts.append(Alert("critical", "performance", msg, change,
+                                    pol.max_error_increase if metric in _LOWER_BETTER else pol.max_metric_drop))
+        if "variant" in joined.columns and joined["variant"].n_unique() > 1:
+            out["by_variant"] = {str(v): float(np.mean([str(a) == str(b) for a, b in zip(g[prediction], g[label])]))
+                                 if self._task != "regression" else
+                                 float(np.sqrt(np.mean((g[prediction].cast(pl.Float64) - g[label].cast(pl.Float64)).to_numpy() ** 2)))
+                                 for (v,), g in joined.group_by("variant")}
+        if alerts:
+            report = MonitorReport(time=_dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+                                   rows=joined.height, prediction_drift=None,
+                                   data_drift=DriftReport(pl.DataFrame(schema={"column": pl.String, "severity": pl.String}),
+                                                          [], [], {}, getattr(self, "reference_rows_", 0), 0),
+                                   performance={**out, "metrics": current}, alerts=alerts, retrain_recommended=True,
+                                   name=self.name)
+            for handler in self._handlers:
+                handler(report, alerts)
+        return out
 
     def on_alert(self, handler) -> "Monitor":
         """Register ``handler(report, alerts)``; called whenever a check raises alerts."""
@@ -221,6 +293,8 @@ class Monitor:
 
         perf = None
         current = self._metrics(df)
+        if current is None and self.estimator_ is not None and df.height:
+            perf = self._estimated(df, alerts)
         if current and self.reference_metrics:
             metric = _headline(self.reference_metrics, self._task)
             ref, cur = self.reference_metrics[metric], current.get(metric)
@@ -243,20 +317,54 @@ class Monitor:
                                alerts=alerts, retrain_recommended=any(a.severity == "critical" and
                                                                       a.kind in ("data_drift", "performance",
                                                                                  "prediction_drift")
-                                                                      for a in alerts))
+                                                                      for a in alerts), name=self.name)
         if self.log_path is not None:
             from ..registry._store import append_jsonl
             append_jsonl(self.log_path, {"time": report.time, "name": self.name, "rows": report.rows,
                                          "drift_share": drift.drift_share, "drifted": drift.drifted,
                                          "prediction_psi": pred_drift["psi"] if pred_drift else None,
-                                         "metric": perf["metric"] if perf else None,
+                                         "metric": (("estimated_" if perf.get("estimated") else "") + perf["metric"])
+                                         if perf else None,
                                          "metric_value": perf["current"] if perf else None,
                                          "alerts": [dataclasses.asdict(a) for a in alerts],
                                          "retrain_recommended": report.retrain_recommended})
         if alerts:
             for handler in self._handlers:
                 handler(report, alerts)
+        for handler in self._check_handlers:
+            try:
+                handler(report)
+            except Exception as exc:          # a sink failing must not lose the check result
+                warnings.warn(f"Monitor check handler failed: {exc}", ServiceWarning, stacklevel=2)
         return report
+
+    def _estimated(self, df: pl.DataFrame, alerts: list) -> dict | None:
+        """Label-free performance estimate (CBPE / direct loss estimation); warns on a drop."""
+        try:
+            est = self.estimator_.estimate(df)
+        except Exception as exc:
+            warnings.warn(f"Performance estimation failed: {exc}", ServiceWarning, stacklevel=3)
+            return None
+        pol = self.policy
+        use_auc = "roc_auc" in est and (self.reference_metrics or {}).get("roc_auc") is not None
+        if use_auc:
+            metric, value, ref = "roc_auc", est["roc_auc"]["estimated"], est["roc_auc"]["reference"]
+            low, high = est["roc_auc"]["low"], est["roc_auc"]["high"]
+        else:
+            metric, value, ref, low, high = est["metric"], est["estimated"], est["reference"], est["low"], est["high"]
+        if metric in _LOWER_BETTER:
+            change = (value - ref) / ref if ref else 0.0
+            bad = change > pol.max_error_increase
+            msg = f"estimated {metric} rose {change:.0%} ({ref:.4g} -> {value:.4g}) - no labels yet"
+        else:
+            change = value - ref
+            bad = -change > pol.max_metric_drop
+            msg = f"estimated {metric} fell {-change:.3f} ({ref:.4f} -> {value:.4f}) - no labels yet"
+        if bad:
+            alerts.append(Alert("warning", "estimated_performance", msg, round(change, 6),
+                                pol.max_error_increase if metric in _LOWER_BETTER else pol.max_metric_drop))
+        return {"metric": metric, "reference": ref, "current": value, "change": round(change, 6),
+                "interval": [low, high], "estimated": True, "details": est}
 
     def history(self) -> pl.DataFrame:
         """Past checks from ``log_path``: time, rows, drift share, metric, alert count."""
@@ -282,7 +390,8 @@ class Monitor:
                           "reference_metrics": self.reference_metrics, "reference_rows": self.reference_rows_,
                           "baseline": self.baseline_.to_dict(),
                           "prediction_baseline": dataclasses.asdict(self.prediction_baseline_)
-                          if self.prediction_baseline_ else None})
+                          if self.prediction_baseline_ else None,
+                          "estimator": self.estimator_.to_dict() if self.estimator_ is not None else None})
         return path
 
     @classmethod
@@ -296,6 +405,9 @@ class Monitor:
         mon.baseline_ = Baseline.from_dict(d["baseline"])
         mon.prediction_baseline_ = ColumnBaseline(**d["prediction_baseline"]) if d["prediction_baseline"] else None
         mon.reference_rows_ = d["reference_rows"]
+        if d.get("estimator"):
+            from .estimate import PerformanceEstimator
+            mon.estimator_ = PerformanceEstimator.from_dict(mon.model, d["estimator"])
         return mon
 
 
@@ -315,7 +427,7 @@ class RetrainResult:
     champion_score: float | None
     challenger_score: float
     improved: bool
-    version: object = None
+    version: Any = None
     promoted_to: str | None = None
 
     def summary(self) -> str:

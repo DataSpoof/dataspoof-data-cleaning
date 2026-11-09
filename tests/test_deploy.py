@@ -141,8 +141,8 @@ def test_onnx_export_matches_original(tmp_path, data):
 def test_build_docker_context(tmp_path, data, model):
     out = ac.build_docker(model, tmp_path / "ctx", name="Churn Model!", version="7", port=9000)
     docker = (out / "Dockerfile").read_text()
-    assert "USER app" in docker and "HEALTHCHECK" in docker and "0.0.0.0:9000" in docker
-    assert "automatedcleaning.deploy.wsgi:app" in docker and "AC_MODEL_VERSION=\"7\"" in docker
+    assert "USER app" in docker and "HEALTHCHECK" in docker and "AC_PORT=9000" in docker
+    assert '"automatedcleaning.deploy", "container"' in docker and "AC_MODEL_VERSION=\"7\"" in docker
     assert "docker build -t churn-model" in docker
     reqs = (out / "requirements.txt").read_text()
     assert "automatedcleaning" in reqs and "gunicorn" in reqs and "scikit-learn==" in reqs

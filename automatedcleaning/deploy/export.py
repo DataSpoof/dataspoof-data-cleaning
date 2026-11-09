@@ -20,6 +20,8 @@ def export_model(model, path, format: str = "bundle", *, sample=None) -> Path:
       ``preprocess.json`` — the format ``load_model``/``AutoML.load`` read; checksum-verified.
     * ``"pickle"``: one ``.joblib`` file holding the whole model object, plus a ``.sha256``
       file next to it. Convenient, but only load pickles you trust.
+    * ``"skops"``: like ``"bundle"`` but the estimator is stored with skops, which loads only
+      explicitly trusted types (no arbitrary code on load); read it with ``load_skops``.
     * ``"onnx"``: the trained estimator as an ONNX graph (needs ``pip install skl2onnx``),
       for ONNX Runtime / other languages. The graph takes the *model-ready* columns (after
       AutoML's cleaning & feature steps); ``preprocess.json`` is written next to it, and
@@ -40,7 +42,53 @@ def export_model(model, path, format: str = "bundle", *, sample=None) -> Path:
         return path
     if format == "onnx":
         return _to_onnx(model, path, sample)
-    raise ValueError("format must be 'bundle', 'pickle' or 'onnx'")
+    if format == "skops":
+        return _to_skops(model, path)
+    raise ValueError("format must be 'bundle', 'pickle', 'onnx' or 'skops'")
+
+
+def _to_skops(model, path: Path) -> Path:
+    """A model bundle whose estimator is stored with skops instead of pickle: loading it can't
+    run arbitrary code, because only explicitly trusted object types are reconstructed."""
+    try:
+        import skops.io as sio
+    except ImportError as exc:
+        raise ImportError('skops export needs skops: pip install "AutomatedCleaning[skops]"') from exc
+    from ..automl import AutoML
+    if not isinstance(model, AutoML):
+        raise TypeError("skops export supports AutoML models")
+    tmp = Path(model.save(Path(path)))
+    (tmp / "model.joblib").unlink()
+    sio.dump(model.model_, tmp / "model.skops")
+    manifest = json.loads((tmp / "manifest.json").read_text(encoding="utf-8"))
+    manifest.update(model_file="model.skops", model_format="skops", model_sha256=file_sha256(tmp / "model.skops"),
+                    skops_types=sorted(set(sio.get_untrusted_types(file=tmp / "model.skops"))))
+    (tmp / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
+    return tmp
+
+
+def load_skops(path, *, trusted: list | None = None):
+    """Load a ``format="skops"`` export. scikit-learn / numpy / scipy types are trusted; any other
+    type stored in the file must be listed in ``trusted`` (see ``manifest.json["skops_types"]``),
+    otherwise loading stops with the list of types it refused."""
+    import skops.io as sio
+
+    from ..automl import AutoML
+    from ..core import Pipeline
+    path = Path(path)
+    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("model_format") != "skops":
+        raise ValueError(f"{path} is not a skops export")
+    if file_sha256(path / "model.skops") != manifest["model_sha256"]:
+        raise ValueError(f"{path}: checksum mismatch - the model file was modified or corrupted")
+    untrusted = sio.get_untrusted_types(file=path / "model.skops")
+    library = [t for t in untrusted if t.split(".")[0] in ("sklearn", "numpy", "scipy")]
+    refused = sorted(set(untrusted) - set(library) - set(trusted or []))
+    if refused:
+        raise ValueError(f"Refusing to load untrusted types {refused}; review them and pass trusted=[...]")
+    model = sio.load(path / "model.skops", trusted=list(untrusted))
+    preprocess = Pipeline.load(path / "preprocess.json") if (path / "preprocess.json").exists() else None
+    return AutoML._from_parts(manifest, model, preprocess)
 
 
 def load_pickle(path):
@@ -148,7 +196,8 @@ RUN pip wheel --no-cache-dir --wheel-dir /wheels -r /tmp/requirements.txt
 # --- runtime stage: small image, no compilers, non-root user ---
 FROM {base}
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \\
-    AC_MODEL_PATH=/app/model AC_MODEL_NAME={name} AC_MODEL_VERSION={version}
+    AC_MODEL_PATH=/app/model AC_MODEL_NAME={name} AC_MODEL_VERSION={version} \\
+    AC_PORT={port} AC_WORKERS={workers}
 COPY --from=build /wheels /wheels
 RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl && rm -rf /wheels \\
     && useradd --create-home --uid 10001 app
@@ -157,23 +206,32 @@ COPY --chown=app:app model /app/model
 USER app
 EXPOSE {port}
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \\
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:{port}/health').status == 200 else 1)"
-CMD ["gunicorn", "--bind", "0.0.0.0:{port}", "--workers", "{workers}", "--timeout", "120", \\
-     "--access-logfile", "-", "automatedcleaning.deploy.wsgi:app"]
+    CMD python -c "import os,urllib.request,sys; p=os.environ.get('AIP_HTTP_PORT') or os.environ['AC_PORT']; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{{p}}/health').status == 200 else 1)"
+# gunicorn on $AIP_HTTP_PORT (Vertex AI) or $AC_PORT; ignores the "serve" argument SageMaker passes.
+ENTRYPOINT ["python", "-m", "automatedcleaning.deploy", "container"]
 """
 
 
-def build_docker(model, out_dir, *, name: str = "model", version: str = "1", port: int = 8000,
+TARGET_PORTS = {"generic": 8000, "sagemaker": 8080, "vertex": 8080, "azureml": 5001}
+
+
+def build_docker(model, out_dir, *, name: str = "model", version: str = "1", port: int | None = None,
                  workers: int = 2, base_image: str = "python:3.11-slim", library_spec: str | None = None,
-                 extra_requirements: list | None = None) -> Path:
+                 extra_requirements: list | None = None, target: str = "generic") -> Path:
     """Write a Docker build context that serves the model over REST (gunicorn + /predict).
 
     ``out_dir`` gets ``Dockerfile``, ``requirements.txt``, ``.dockerignore``, ``README.md`` and
     the saved ``model/``. Build with ``docker build -t <name> <out_dir>``. The image runs as a
     non-root user, has a health check, and reads ``AC_API_KEY`` to require an API key.
+    ``target``: ``"generic"`` (port 8000), ``"sagemaker"`` (AWS SageMaker: port 8080,
+    ``/ping`` + ``/invocations``), ``"vertex"`` (Google Vertex AI: ``$AIP_HTTP_PORT`` and its
+    routes) or ``"azureml"`` (Azure ML: ``/score``). Every target serves every route.
     ``library_spec`` pins how the library is installed: default this version from PyPI; or a
     requirement string; or the path of a local wheel/sdist, which is copied into the context."""
     from ._names import safe_image_name
+    if target not in TARGET_PORTS:
+        raise ValueError(f"target must be one of {list(TARGET_PORTS)}")
+    port = int(port if port is not None else TARGET_PORTS[target])
     model = resolve_model(model)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

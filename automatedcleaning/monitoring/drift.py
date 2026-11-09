@@ -69,7 +69,7 @@ class ColumnBaseline:
             x = x[~np.isnan(x)]
             nulls += int(s.len() - nulls - len(x))
             idx = np.searchsorted(np.asarray(self.edges, float), x, side="right")
-            counts = np.bincount(idx, minlength=len(self.edges) + 1).astype(float)
+            counts = np.bincount(idx, minlength=len(self.edges or []) + 1).astype(float)
         else:
             values = s.drop_nulls().cast(pl.String).value_counts()
             known = {v: i for i, v in enumerate(self.labels[:-1])}
@@ -93,7 +93,7 @@ class ColumnBaseline:
         has_other = OTHER in self.labels
         if has_other:                      # categories beyond the top ones were seen, just pooled
             return 0.0
-        return float((~vals.is_in(list(known))).mean())
+        return float((~vals.is_in(list(known))).mean() or 0.0)  # type: ignore[arg-type]
 
 
 def fit_column(s: pl.Series, bins: int = 10) -> ColumnBaseline | None:
@@ -125,12 +125,12 @@ def fit_column(s: pl.Series, bins: int = 10) -> ColumnBaseline | None:
         return None                        # ID-like
     vc = text.value_counts(sort=True)
     cats, counts = vc[vc.columns[0]].to_list(), vc[vc.columns[1]].to_numpy().astype(float)
-    labels, props = cats[:MAX_CATEGORIES], list(counts[:MAX_CATEGORIES])
+    labels, cat_counts = cats[:MAX_CATEGORIES], [float(v) for v in counts[:MAX_CATEGORIES]]
     if len(cats) > MAX_CATEGORIES:
         labels.append(OTHER)
-        props.append(float(counts[MAX_CATEGORIES:].sum()))
-    props = np.append(np.array(props), nulls) / n
-    return ColumnBaseline(s.name, "categorical", props.tolist(), labels + [MISSING], None, n, None, None, nulls / n)
+        cat_counts.append(float(counts[MAX_CATEGORIES:].sum()))
+    shares = np.append(np.array(cat_counts), nulls) / n
+    return ColumnBaseline(s.name, "categorical", shares.tolist(), labels + [MISSING], None, n, None, None, nulls / n)
 
 
 @dataclasses.dataclass
@@ -180,7 +180,7 @@ def compare_column(base: ColumnBaseline, s: pl.Series) -> dict:
     if base.kind == "numeric":
         x = s.cast(pl.Float64, strict=False).drop_nulls()
         if x.len():
-            row["mean_cur"] = float(x.mean())
+            row["mean_cur"] = float(x.mean() or 0.0)  # type: ignore[arg-type]
             if base.std:
                 row["mean_shift_std"] = round((row["mean_cur"] - base.mean) / base.std, 4)
     sev = severity_of(value)

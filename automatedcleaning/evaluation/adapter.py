@@ -41,7 +41,7 @@ class ModelAdapter:
 
             return cls(
                 name=model.best_["model"], target=model.target, task=model.task_.task,
-                classes=list(model.classes_) if classify else None, to_X=to_X,
+                classes=list(model.classes_ or []) if classify else None, to_X=to_X,
                 predict_raw=(lambda X: np.asarray(model.model_.predict(X)).astype(int)) if classify
                 else (lambda X: np.asarray(model.model_.predict(X), dtype=float)),
                 proba=model.model_.predict_proba if classify else None, automl=model)
@@ -58,9 +58,9 @@ class ModelAdapter:
 
             def predict_raw(X):
                 pred = model.predict(X)
-                return np.array([index[p] for p in pred]) if classify else np.asarray(pred, dtype=float)
+                return np.array([index[p] for p in pred]) if classify else np.asarray(pred, dtype=np.float64)
 
-            task = ("binary" if len(classes) == 2 else "multiclass") if classify else "regression"
+            task = ("binary" if len(classes or []) == 2 else "multiclass") if classify else "regression"
             return cls(name=type(model).__name__, target=target, task=task, classes=classes,
                        to_X=to_X, predict_raw=predict_raw,
                        proba=model.predict_proba if classify else None)

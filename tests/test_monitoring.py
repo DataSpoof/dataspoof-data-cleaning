@@ -79,7 +79,9 @@ def test_monitor_healthy_then_drift_and_decay(tmp_path, clf):
     assert hist["retrain_recommended"].to_list() == [False, True]
 
     small = mon.check(live.head(20).drop("y"))                     # unlabelled + tiny batch
-    assert small.performance is None and any(a.kind == "volume" for a in small.alerts)
+    # no labels: performance is *estimated* (CBPE), never reported as measured
+    assert small.performance["estimated"] and any(a.kind == "volume" for a in small.alerts)
+    assert not any(a.kind == "performance" for a in small.alerts)
     missing = mon.check(live.drop("a"))
     assert any(a.kind == "schema" and a.severity == "critical" for a in missing.alerts)
 

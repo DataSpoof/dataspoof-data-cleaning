@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import contextlib
 import dataclasses
 import io
 import json
+import math
 import time
 import warnings
 
@@ -65,7 +68,8 @@ class AutoML:
                  time_budget: float = 60.0, max_trials: int | None = None, cv: int = 5,
                  preprocess="auto", include=None, exclude=None, ensemble: bool = True,
                  on_leakage: str = "drop", search_sample: int = 50_000, seed: int = 42,
-                 verbose: bool = True):
+                 verbose: bool = True, n_jobs: int = 1, search: str = "random", imbalance: str | None = "auto",
+                 conformal: bool = True):
         if task not in ("auto", "binary", "multiclass", "regression", "classification"):
             raise ValueError("task must be auto, binary, multiclass, regression or classification")
         if on_leakage not in ("drop", "warn", "raise", "ignore"):
@@ -77,7 +81,17 @@ class AutoML:
         self.preprocess, self.include, self.exclude = preprocess, include, exclude
         self.ensemble, self.on_leakage = ensemble, on_leakage
         self.search_sample, self.seed, self.verbose = search_sample, seed, verbose
-        self.model_ = None
+        self.n_jobs = n_jobs        # parallel CV folds per trial (-1 = all cores)
+        if search not in ("random", "optuna"):
+            raise ValueError("search must be 'random' or 'optuna'")
+        if imbalance not in (None, "auto", "balanced"):
+            raise ValueError("imbalance must be None, 'auto' or 'balanced'")
+        self.search, self.imbalance, self.conformal = search, imbalance, conformal
+        self.model_: Any = None
+        self.classes_: list | None = None
+        self.trials_: list = []
+        self._importance_sample: Any = None
+        self.leakage_: Any = None
 
     # ── helpers ─────────────────────────────────────────────────────────────
     def _log(self, message: str):
@@ -115,7 +129,7 @@ class AutoML:
             counts = np.bincount(y)
             smallest = int(counts[counts > 0].min())
             if smallest < 2:
-                rare = self.classes_[int(np.argmin(np.where(counts > 0, counts, np.inf)))]
+                rare = (self.classes_ or [])[int(np.argmin(np.where(counts > 0, counts, np.inf)))]
                 raise ValueError(f"Class {rare!r} has only 1 example; each class needs at least 2.")
             folds = min(self.cv, smallest)
             return (StratifiedKFold(folds, shuffle=True, random_state=self.seed),
@@ -124,6 +138,8 @@ class AutoML:
 
     def _estimator(self, spec, params):
         from sklearn.pipeline import Pipeline as SkPipeline
+        if getattr(self, "class_weight_", None) and "class_weight" in spec.space and "class_weight" not in params:
+            params = {**params, "class_weight": self.class_weight_}     # imbalance: start from balanced weights
         model = spec.build({**spec.defaults, **params}, self.seed, self.is_classification)
         return SkPipeline([("prep", make_preprocessor(self.feature_kinds_, spec.scale)), ("model", model)])
 
@@ -143,7 +159,7 @@ class AutoML:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 res = cross_validate(estimator, X, y, cv=splitter, scoring=self.metric_,
-                                     error_score="raise", n_jobs=1)
+                                     error_score="raise", n_jobs=self.n_jobs)
             trial["score"] = float(np.mean(res["test_score"]))
             trial["std"] = float(np.std(res["test_score"]))
         except Exception as exc:          # a failing model shouldn't stop the search
@@ -184,8 +200,31 @@ class AutoML:
                 break
             self._evaluate(spec.name, self._estimator(spec, {}), {}, X, y, splitter)
 
-        while room():                             # random search around the best families
-            best = {}
+        studies: dict = {}
+        if self.search == "optuna":
+            try:
+                import optuna
+            except ImportError as exc:
+                raise ImportError('search="optuna" needs optuna: pip install "AutomatedCleaning[optuna]"') from exc
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        def propose(spec):
+            if self.search != "optuna" or not spec.space:
+                return sample_params(spec.space, rng), None
+            from optuna.distributions import CategoricalDistribution, FloatDistribution, IntDistribution
+            dists = {}
+            for k, v in spec.space.items():
+                dists[k] = (FloatDistribution(v[1], v[2], log=True) if v[0] == "log" else
+                            FloatDistribution(v[1], v[2]) if v[0] == "uniform" else
+                            IntDistribution(v[1], v[2]) if v[0] == "int" else CategoricalDistribution(v[1]))
+            if spec.name not in studies:
+                studies[spec.name] = optuna.create_study(direction="maximize",
+                                                         sampler=optuna.samplers.TPESampler(seed=self.seed))
+            trial = studies[spec.name].ask(dists)
+            return dict(trial.params), trial
+
+        while room():                             # search around the best families (random or Optuna TPE)
+            best: dict = {}
             for t in model_trials():
                 if t["error"] is None and t["score"] > best.get(t["model"], (-np.inf,))[0]:
                     best[t["model"]] = (t["score"], t["seconds"])
@@ -196,8 +235,14 @@ class AutoML:
             weights = np.array(_FAMILY_WEIGHTS[: len(fitting)])
             family = fitting[int(rng.choice(len(fitting), p=weights / weights.sum()))]
             spec = by_name[family]
-            params = sample_params(spec.space, rng)
-            self._evaluate(family, self._estimator(spec, params), params, X, y, splitter)
+            params, trial = propose(spec)
+            result = self._evaluate(family, self._estimator(spec, params), params, X, y, splitter)
+            if trial is not None:
+                import optuna
+                if result["error"] is None:
+                    studies[family].tell(trial, result["score"])
+                else:
+                    studies[family].tell(trial, state=optuna.trial.TrialState.FAIL)
 
         if self.ensemble:
             best_per_family = {}
@@ -264,6 +309,12 @@ class AutoML:
             self.classes_ = None
             y = y_raw.cast(pl.Float64).to_numpy()
         self.metric_ = self.metric or DEFAULT_METRICS[info.task]
+        self.class_weight_ = None
+        if self.is_classification and self.imbalance:
+            share = np.bincount(y).min() / len(y)
+            if self.imbalance == "balanced" or share < 0.2:
+                self.class_weight_ = "balanced"
+                self._log(f"  class imbalance (smallest class {share:.1%}): using balanced class weights")
         from sklearn.metrics import get_scorer
         get_scorer(self.metric_)                  # fail early on a bad metric name
 
@@ -292,9 +343,11 @@ class AutoML:
             estimator = self._ensemble_estimator(pairs)
         else:
             estimator = self._estimator(by_name[best["model"]], best["params"])
+        self.conformal_ = self._calibrate(estimator, Xs, ys, splitter) if self.conformal else None
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             self.model_ = estimator.fit(X, y)
+        self.set_inference_threads(1)
         sample = np.random.default_rng(self.seed).choice(len(X), size=min(len(X), 2000), replace=False)
         self._importance_sample = (X.iloc[np.sort(sample)], y[np.sort(sample)])
         self.n_rows_, self.n_features_ = len(X), X.shape[1]
@@ -334,8 +387,74 @@ class AutoML:
         proba = self.model_.predict_proba(self._features(df))
         return pl.DataFrame({f"proba_{c}": proba[:, i] for i, c in enumerate(self.classes_)})
 
+    # ── conformal prediction ────────────────────────────────────────────────
+    def _calibrate(self, estimator, X, y, splitter) -> dict | None:
+        """Out-of-fold nonconformity scores of the chosen model, summarised as quantiles (so they
+        fit in the manifest): |error| for regression, 1 - P(true class) for classification."""
+        from sklearn.base import clone
+        scores = []
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                for tr, te in splitter.split(X, y):
+                    m = clone(estimator).fit(X.iloc[tr], y[tr])
+                    if self.classes_ is not None:
+                        p = m.predict_proba(X.iloc[te])
+                        scores.append(1.0 - p[np.arange(len(te)), y[te]])
+                    else:
+                        scores.append(np.abs(y[te] - m.predict(X.iloc[te])))
+        except Exception as exc:              # calibration is a bonus; never fail the fit over it
+            self._log(f"  conformal calibration skipped: {exc}")
+            return None
+        s = np.sort(np.concatenate(scores))
+        grid = [round(q, 3) for q in np.arange(0.5, 0.995, 0.005)]
+        return {"n": int(len(s)), "levels": grid, "quantiles": [float(np.quantile(s, q, method="higher")) for q in grid]}
+
+    def _conformal_q(self, coverage: float) -> float:
+        c = getattr(self, "conformal_", None)
+        if not c:
+            raise ValueError("No conformal calibration: fit with conformal=True (the default)")
+        n = c["n"]
+        level = min(1.0, math.ceil((n + 1) * coverage) / n)       # finite-sample correction
+        levels, qs = c["levels"], c["quantiles"]
+        if level > levels[-1]:
+            return qs[-1]
+        return float(np.interp(level, levels, qs))
+
+    def predict_interval(self, df, coverage: float = 0.9) -> pl.DataFrame:
+        """Regression: ``prediction, lower, upper`` such that about ``coverage`` of true values
+        fall inside (split-conformal on cross-validation residuals)."""
+        if self.classes_ is not None:
+            raise ValueError("predict_interval is for regression; use predict_set for classification")
+        pred = self.predict(df).to_numpy()
+        q = self._conformal_q(coverage)
+        return pl.DataFrame({"prediction": pred, "lower": pred - q, "upper": pred + q})
+
+    def predict_set(self, df, coverage: float = 0.9) -> pl.Series:
+        """Classification: the set of labels that contains the true one with probability
+        ``coverage`` (larger sets = the model is less sure)."""
+        if self.classes_ is None:
+            raise ValueError("predict_set is for classification; use predict_interval for regression")
+        proba = self.model_.predict_proba(self._features(df))
+        q = self._conformal_q(coverage)
+        sets = [[self.classes_[j] for j in np.where(row >= 1 - q)[0]] or [self.classes_[int(np.argmax(row))]]
+                for row in proba]
+        return pl.Series(f"{self.target}_set", sets)
+
+    def predict_with_proba(self, df):
+        """``(labels, probabilities)`` from one preprocessing pass (classification), or
+        ``(values, None)`` for regression — what a serving endpoint needs, at half the cost of
+        calling ``predict`` and ``predict_proba`` separately."""
+        X = self._features(df)                    # raises clearly if not fitted
+        name = f"{self.target}_pred"
+        if self.classes_ is None:
+            return pl.Series(name, np.asarray(self.model_.predict(X), dtype=float)), None
+        proba = self.model_.predict_proba(X)
+        labels = pl.Series(name, [self.classes_[int(i)] for i in np.argmax(proba, axis=1)])
+        return labels, pl.DataFrame({f"proba_{c}": proba[:, i] for i, c in enumerate(self.classes_)})
+
     def _encode_labels(self, series: pl.Series) -> np.ndarray:
-        index = {v: i for i, v in enumerate(self.classes_)}
+        index = {v: i for i, v in enumerate(self.classes_ or [])}
         unknown = set(series.to_list()) - set(index)
         if unknown:
             raise ValueError(f"Labels not seen in training: {sorted(map(str, unknown))[:5]}")
@@ -390,6 +509,29 @@ class AutoML:
                               "std": res.importances_std})
                 .sort("importance", descending=True))
 
+    def set_inference_threads(self, n: int = 1) -> "AutoML":
+        """Threads each fitted estimator uses to predict. Defaults to 1 after fit/load: for the
+        small batches a REST API scores, starting a thread pool per call costs far more than it
+        saves (~80 ms per single-row request with a random forest). Use -1 for large batch jobs."""
+        seen = set()
+
+        def walk(obj):
+            if obj is None or id(obj) in seen:
+                return
+            seen.add(id(obj))
+            if hasattr(obj, "n_jobs"):
+                try:
+                    obj.n_jobs = n
+                except Exception:
+                    pass
+            for child in list(getattr(obj, "estimators_", None) or []) + [s for _, s in getattr(obj, "steps", [])]:
+                walk(child)
+            for name in ("named_estimators_", "named_steps"):
+                for child in (getattr(obj, name, None) or {}).values() if hasattr(getattr(obj, name, None), "values") else []:
+                    walk(child)
+        walk(self.model_)
+        return self
+
     # ── evaluation & explainability (see automatedcleaning.evaluation) ─────
     def report(self, df, **kw):
         """Detailed held-out metrics: an ``EvaluationReport``."""
@@ -438,7 +580,7 @@ class AutoML:
                  f"  Best: {self.best_['model']}  cv {label} = {_shown(self.metric_, self.best_['score']):.4f}"
                  f" ± {self.best_['std']:.4f}",
                  "  Best per model:"]
-        best = {}
+        best: dict = {}
         for t in self.trials_:
             if t["error"] is None and t["score"] > best.get(t["model"], {"score": -np.inf})["score"]:
                 best[t["model"]] = t
@@ -462,6 +604,7 @@ class AutoML:
             "cv": self.cv_description_, "n_rows": self.n_rows_, "n_features": self.n_features_,
             "fit_seconds": self.fit_seconds_,
             "leakage": self.leakage_.to_dict() if self.leakage_ is not None else None,
+            "conformal": getattr(self, "conformal_", None), "class_weight": getattr(self, "class_weight_", None),
         }
         return save_artifact(path, "supervised", self.model_, manifest, self.preprocess_)
 
@@ -469,6 +612,10 @@ class AutoML:
     def load(cls, path) -> "AutoML":
         """Load a model saved with :meth:`save` (verifies the model checksum first)."""
         manifest, model, preprocess = load_artifact(path, "supervised")
+        return cls._from_parts(manifest, model, preprocess)
+
+    @classmethod
+    def _from_parts(cls, manifest: dict, model, preprocess) -> "AutoML":
         obj = cls(manifest["target"], verbose=False)
         obj.model_, obj.preprocess_ = model, preprocess
         obj.task_ = TaskInfo(**manifest["task"])
@@ -478,4 +625,6 @@ class AutoML:
         obj.n_rows_, obj.n_features_ = manifest["n_rows"], manifest["n_features"]
         obj.fit_seconds_, obj.leakage_ = manifest["fit_seconds"], None
         obj._importance_sample = None
+        obj.conformal_, obj.class_weight_ = manifest.get("conformal"), manifest.get("class_weight")
+        obj.set_inference_threads(1)
         return obj

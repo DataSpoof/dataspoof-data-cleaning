@@ -46,6 +46,8 @@ class SQLSource:
 
     def __init__(self, connection, *, quote: str | None = None):
         self._url = None
+        from ..secretstore import resolve
+        connection = resolve(connection)          # "vault://secret/db#url" etc. keeps passwords out of code
         if isinstance(connection, str):
             self._url = connection
             try:
@@ -131,6 +133,62 @@ class SQLSource:
         if table is not None:
             return self.read_table(table, **kw)
         raise ValueError("Pass query='SELECT …' or table='name'.")
+
+    # ── writing ─────────────────────────────────────────────────────────────
+    def insert(self, table: str, rows, *, create: bool = True) -> int:
+        """Append rows (a DataFrame or a list of dicts) with bound parameters. ``create=True``
+        creates the table first if it doesn't exist (column types inferred from the values)."""
+        if isinstance(rows, pl.DataFrame):
+            rows = rows.to_dicts()
+        rows = list(rows)
+        if not rows:
+            return 0
+        cols = list(rows[0])
+        q = self.quote
+        if create:
+            def sql_type(v):
+                if isinstance(v, bool):
+                    return "BOOLEAN"
+                if isinstance(v, int):
+                    return "BIGINT"
+                if isinstance(v, float):
+                    return "DOUBLE PRECISION" if self.dialect not in ("sqlite", "mysql", "mariadb") else "REAL"
+                return "TEXT"
+            types = {c: next((sql_type(r[c]) for r in rows if r.get(c) is not None), "TEXT") for c in cols}
+            ddl = ", ".join(f"{quote_ident(c, q)} {types[c]}" for c in cols)
+            self.execute(f"CREATE TABLE IF NOT EXISTS {quote_ident(table, q)} ({ddl})")
+        names = {c: f"p{i}" for i, c in enumerate(cols)}
+        sql = (f"INSERT INTO {quote_ident(table, q)} ({', '.join(quote_ident(c, q) for c in cols)}) "
+               f"VALUES ({', '.join(':' + names[c] for c in cols)})")
+        params = [{names[c]: r.get(c) for c in cols} for r in rows]
+        if self._sa:
+            from sqlalchemy import text
+            with self._conn.begin() as conn:
+                conn.execute(text(sql), params)
+        else:
+            q_sql, _ = translate_params(sql, params[0], self._paramstyle)
+            cur = self._conn.cursor()
+            try:
+                cur.executemany(q_sql, [translate_params(sql, p, self._paramstyle)[1] for p in params])
+                self._conn.commit()
+            finally:
+                cur.close()
+        return len(rows)
+
+    def execute(self, sql: str, params: dict | None = None) -> None:
+        """Run a statement that returns no rows (DDL, DML) and commit."""
+        if self._sa:
+            from sqlalchemy import text
+            with self._conn.begin() as conn:
+                conn.execute(text(sql), params or {})
+            return
+        q, p = translate_params(sql, params, self._paramstyle)
+        cur = self._conn.cursor()
+        try:
+            cur.execute(q, p) if p else cur.execute(q)
+            self._conn.commit()
+        finally:
+            cur.close()
 
     # ── metadata ────────────────────────────────────────────────────────────
     def tables(self) -> list:

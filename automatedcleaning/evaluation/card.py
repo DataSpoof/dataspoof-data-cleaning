@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import dataclasses
 import datetime as _dt
 import html
@@ -98,7 +100,7 @@ def _automl_details(automl) -> dict:
     from ..automl.automl import _metric_label, _shown
     label = _metric_label(automl.metric_)
     best = automl.best_
-    per_family = {}
+    per_family: dict = {}
     for t in automl.trials_:
         if t["error"] is None and t["score"] > per_family.get(t["model"], {"score": -np.inf})["score"]:
             per_family[t["model"]] = t
@@ -151,7 +153,7 @@ def model_card(model, test_df=None, *, target: str | None = None, sensitive=None
     automl = ad.automl
     info = _automl_details(automl) if automl is not None else {}
     title = name or f"{ad.target} {ad.task} model"
-    data = {
+    data: dict[str, Any] = {
         "title": title,
         "generated": _dt.datetime.now().isoformat(timespec="seconds"),
         "details": {"name": title, "version": version, "description": description,
@@ -262,15 +264,15 @@ def model_card(model, test_df=None, *, target: str | None = None, sensitive=None
                  "error_ratio": "error ratio", "bias_difference": "bias gap"}
         for r in fairness.results:
             if r.flags:
-                parts = [f"{names.get(f.split()[0], f.split()[0])} {f.split()[1]}" for f in r.flags]
-                ethics.append(f"Fairness ({r.attribute}): {len(r.flags)} disparity flag(s) — {', '.join(parts)}. "
+                flagged = [f"{names.get(f.split()[0], f.split()[0])} {f.split()[1]}" for f in r.flags]
+                ethics.append(f"Fairness ({r.attribute}): {len(r.flags)} disparity flag(s) — {', '.join(flagged)}. "
                               "See the Fairness section; decide whether these gaps are acceptable for the "
                               "intended use.")
             if r.used_by_model and " & " not in r.attribute:
                 ethics.append(f"The sensitive attribute '{r.attribute}' is an input to the model; check this is "
                               "lawful and appropriate for the intended use.")
-        flagged = fairness.proxies.filter(fairness.proxies["flag"])
-        for row in flagged.head(5).iter_rows(named=True):
+        proxies = fairness.proxies.filter(fairness.proxies["flag"])
+        for row in proxies.head(5).iter_rows(named=True):
             ethics.append(f"'{row['feature']}' is strongly associated with '{row['attribute']}' "
                           f"(Cramér's V {row['cramers_v']:.2f}) and may act as a proxy for it.")
         if fairness.passed:
@@ -294,7 +296,7 @@ def model_card(model, test_df=None, *, target: str | None = None, sensitive=None
 #   ("bars", [(label, value_text, fraction, note)]) ("list", [text]) ("matrix", headers, rows)
 
 def _blocks(data: dict) -> list:
-    b = []
+    b: list[tuple] = []
     d = data["details"]
     task = {"binary": "Binary classification", "multiclass": "Multiclass classification",
             "regression": "Regression"}.get(d["task"], d["task"])
@@ -541,7 +543,8 @@ ul{margin:8px 0;padding-left:20px}li{margin:4px 0}li.warn{color:var(--warn)}
 
 
 def _render_html(title: str, blocks, doc_kind: str = "Model card") -> str:
-    parts, open_section = [], False
+    parts: list[str] = []
+    open_section = False
 
     def close():
         nonlocal open_section
@@ -549,7 +552,7 @@ def _render_html(title: str, blocks, doc_kind: str = "Model card") -> str:
             parts.append("</section>")
             open_section = False
 
-    intro = []
+    intro: list[str] = []
     for blk in blocks:
         kind = blk[0]
         if kind == "h2":
@@ -583,13 +586,13 @@ def _render_html(title: str, blocks, doc_kind: str = "Model card") -> str:
             target.append(f"<div class=tbl><table class=matrix><thead><tr>{head}</tr></thead>"
                           f"<tbody>{body}</tbody></table></div>")
         elif kind == "bars":
-            rows = []
+            bar_rows: list[str] = []
             for label, value, frac, note in blk[1]:
-                rows.append(f"<div>{_inline(label)}</div><div class=track><div class=bar "
+                bar_rows.append(f"<div>{_inline(label)}</div><div class=track><div class=bar "
                             f"style=\"width:{max(2, frac * 100):.1f}%\"></div></div><div class=val>{_inline(value)}</div>")
                 if note:
-                    rows.append(f"<div class=note>{_inline(note)}</div>")
-            target.append(f"<div class=bars>{''.join(rows)}</div>")
+                    bar_rows.append(f"<div class=note>{_inline(note)}</div>")
+            target.append(f"<div class=bars>{''.join(bar_rows)}</div>")
         elif kind == "list":
             items = "".join(f"<li{' class=warn' if str(i).startswith('⚠') else ''}>{_inline(i)}</li>"
                             for i in blk[1])

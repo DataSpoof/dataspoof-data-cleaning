@@ -26,7 +26,21 @@ from .registry import ModelRegistry, PromotionError, Run, Tracker
 from .deploy import batch_score, build_docker, export_model, make_app, score, serve
 from .monitoring import Monitor, RetrainPolicy, drift_report, retrain, webhook_alert
 from .insights import InsightsReport, find_insights, insights_report
-from . import ingestion
+from . import ingestion, scale, security, forecast, anomaly, causal, integrations
+from . import media, stats, versioning, feature_store, splitting
+from .splitting import SplitResult, check_split, cv_folds, split_data
+from . import robustness, poisoning, environments, lineage, secretstore, cicd
+from .robustness import RobustnessReport, robustness_report
+from .poisoning import PoisoningReport, poisoning_report
+from .environments import Environments, ReleaseError
+from .lineage import Lineage, LineageGraph
+from .secretstore import get_secret
+from .versioning import DataRepository, DatasetVersion
+from .feature_store import Entity, FeatureStore, FeatureView
+from .forecast import Forecaster, reconcile_bottom_up
+from .anomaly import AutoAnomaly
+from .causal import UpliftModel, estimate_effect, qini
+from .scale import to_sql, transform_file
 from .ingestion import (BigQuerySource, IncrementalLoader, IngestResult, RESTSource, SnowflakeSource, SQLSource,
                         infer_types, ingest, read, read_file)
 

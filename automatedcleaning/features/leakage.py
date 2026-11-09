@@ -103,13 +103,14 @@ def _single_feature_score(x, y, kind: str, categorical: bool, cv: int, seed: int
     for tr, te in splitter.split(np.zeros(len(y)), y if classify else None):
         if categorical:      # out-of-fold category average (or majority class), one pass
             if kind == "multiclass":
-                tallies = {}
+                tallies: dict = {}
                 for v, t in zip(x[tr], y[tr]):
                     tallies.setdefault(v, Counter())[t] += 1
                 prior = Counter(y[tr].tolist()).most_common(1)[0][0]
                 table = {k: c.most_common(1)[0][0] for k, c in tallies.items()}
             else:
-                sums, counts = defaultdict(float), defaultdict(int)
+                sums: dict = defaultdict(float)
+                counts: dict = defaultdict(int)  # type: ignore[no-redef]
                 for v, t in zip(x[tr], y[tr]):
                     sums[v] += t
                     counts[v] += 1

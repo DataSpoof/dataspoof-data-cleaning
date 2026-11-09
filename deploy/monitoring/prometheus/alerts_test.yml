@@ -1,0 +1,110 @@
+# Unit tests for alerts.yml:  promtool test rules alerts_test.yml
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+
+tests:
+  - name: errors and latency
+    interval: 1m
+    input_series:
+      # 100 req/min, 5 of them 500s (5% > 2%)
+      - series: 'ac_requests_total{model="churn",route="predict",status="200",variant="primary"}'
+        values: '0+95x20'
+      - series: 'ac_requests_total{model="churn",route="predict",status="500",variant="primary"}'
+        values: '0+5x20'
+      - series: 'ac_predict_duration_seconds_bucket{model="churn",le="0.25"}'
+        values: '0+10x20'
+      - series: 'ac_predict_duration_seconds_bucket{model="churn",le="1"}'
+        values: '0+100x20'
+      - series: 'ac_predict_duration_seconds_bucket{model="churn",le="+Inf"}'
+        values: '0+100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ACHighErrorRate
+        exp_alerts:
+          - exp_labels: {severity: critical, model: churn}
+            exp_annotations:
+              summary: "churn: 5% of predictions fail (5xx)"
+      - eval_time: 15m
+        alertname: ACHighLatencyP95
+        exp_alerts:
+          - exp_labels: {severity: warning, model: churn}
+            exp_annotations:
+              summary: "churn: p95 latency 958.3ms"
+      - eval_time: 15m
+        alertname: ACHighRejectRate
+        exp_alerts: []
+
+  - name: service down
+    interval: 1m
+    input_series:
+      - series: 'up{job="automatedcleaning",instance="model:8000"}'
+        values: '1 1 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ACModelServiceDown
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: ACModelServiceDown
+        exp_alerts:
+          - exp_labels: {severity: critical, team: ml-platform, job: automatedcleaning, instance: "model:8000"}
+            exp_annotations:
+              summary: "Model service model:8000 is down"
+              description: "Prometheus has not been able to scrape model:8000 for 2 minutes."
+
+  - name: drift and quality
+    interval: 1m
+    input_series:
+      - series: 'ac_drift_share{model="churn",version="3"}'
+        values: '0.1x10 0.5x20'
+      - series: 'ac_feature_psi{model="churn",version="3",feature="tenure"}'
+        values: '0.4x30'
+      - series: 'ac_feature_psi{model="churn",version="3",feature="plan"}'
+        values: '0.02x30'
+      - series: 'ac_performance_change{model="churn",version="3",metric="roc_auc",kind="estimated"}'
+        values: '-0.08x40'
+      - series: 'ac_live_accuracy{model="churn",version="3",variant="primary"}'
+        values: '0.80x40'
+      - series: 'ac_reference_metric{model="churn",version="3",metric="accuracy"}'
+        values: '0.90x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ACDataDrift
+        exp_alerts: []
+      - eval_time: 28m
+        alertname: ACDataDrift
+        exp_alerts:
+          - exp_labels: {severity: critical, model: churn}
+            exp_annotations:
+              summary: "churn: 50% of input columns drifted strongly - consider retraining"
+      - eval_time: 20m
+        alertname: ACFeatureDrift
+        exp_alerts:
+          - exp_labels: {severity: warning, model: churn, feature: tenure}
+            exp_annotations:
+              summary: "churn: feature tenure drifted (PSI 0.40)"
+      - eval_time: 35m
+        alertname: ACEstimatedPerformanceDrop
+        exp_alerts:
+          - exp_labels: {severity: warning, model: churn, metric: roc_auc}
+            exp_annotations:
+              summary: "churn: estimated roc_auc fell by -0.080 (before labels arrive)"
+      - eval_time: 35m
+        alertname: ACLiveAccuracyDrop
+        exp_alerts:
+          - exp_labels: {severity: critical, model: churn}
+            exp_annotations:
+              summary: "churn: accuracy on real outcomes is 80%, more than 5 points below validation"
+
+  - name: failed reload
+    interval: 1m
+    input_series:
+      - series: 'ac_model_reloads_total{model="churn",version="3",result="failed"}'
+        values: '0 0 1 1 1'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ACModelReloadFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, model: churn, version: "3", result: failed}
+            exp_annotations:
+              summary: "churn: a hot reload failed; the previous version is still being served"

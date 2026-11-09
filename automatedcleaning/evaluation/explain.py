@@ -110,7 +110,7 @@ class Explanation:
             c = self._class(class_)
             pred = self.base_value + self.values[i].sum(axis=0)
             c = int(np.argmax(pred)) if c is None else c
-            output, base, value = f"P(class = {self.classes[c]})", self.base_value[c], pred[c]
+            output, base, value = f"P(class = {(self.classes or [])[c]})", np.asarray(self.base_value)[c], pred[c]
         else:
             output, base, value = self.output, float(self.base_value), float(self.predictions[i])
         parts = [f"{r['feature']} = {r['value']} ({r['contribution']:+.3g})"
@@ -178,13 +178,13 @@ def _coalitions(p: int, exact: bool, n_permutations: int, rng):
         weight = np.array([math.factorial(s) * math.factorial(p - s - 1) / math.factorial(p)
                            for s in range(p)])
 
-        def combine(v):
+        def combine_exact(v):
             phi = np.zeros((p, v.shape[1]))
             for i in range(p):
                 without = ints[((ints >> i) & 1) == 0]
                 phi[i] = (weight[size[without]][:, None] * (v[without | (1 << i)] - v[without])).sum(axis=0)
             return phi
-        return masks, combine
+        return masks, combine_exact
 
     half = max(1, (n_permutations + 1) // 2)
     perms = []
@@ -221,7 +221,8 @@ def shapley_values(f, X: pd.DataFrame, background: pd.DataFrame, *, exact_max_fe
     xs = {c: X[c].to_numpy() for c in cols}
     dtypes = X.dtypes
     rows_per_call = max(1, _BATCH_ROWS // (U * B))
-    values, base = [], None
+    values: list = []
+    base = None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         base = f(background).mean(axis=0)

@@ -328,7 +328,8 @@ def find_insights(df, target: str | None = None, *, time_col="auto", model=None,
                                             f"{q.issues[0].title}. Treat findings involving it with care.",
                                  0.3, [], {"score": q.score, "grade": q.grade, "issues": len(q.issues)}))
     found.sort(key=lambda i: -i.strength)
-    kept, per = [], {}
+    kept: list = []
+    per: dict = {}
     for ins in found:                     # avoid ten findings about the same column
         key = ins.columns[0] if ins.kind == "driver" else None
         if key is not None:

@@ -10,8 +10,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import contextlib
 import dataclasses
+import functools
 import datetime as _dt
 import difflib
 import hashlib
@@ -106,6 +109,11 @@ def _jsonable(obj):
 
 
 def _versions() -> dict:
+    return dict(_versions_cached())
+
+
+@functools.lru_cache(maxsize=1)
+def _versions_cached() -> dict:
     from importlib import metadata
 
     out = {"format": FORMAT_VERSION, "python": platform.python_version(),
@@ -124,7 +132,7 @@ def _parse_dtype(name: str):
         return simple
     match = re.fullmatch(r"Datetime\(time_unit='(\w+)', time_zone=(?:None|'([^']+)')\)", name)
     if match:
-        return pl.Datetime(match.group(1), match.group(2))
+        return pl.Datetime(match.group(1), match.group(2))  # type: ignore[arg-type]
     return None
 
 
@@ -346,7 +354,7 @@ class Pipeline:
                 continue
             buf = io.StringIO()
             t0 = time.perf_counter()
-            step._pipeline_target = self.target
+            step._pipeline_target = self.target  # type: ignore[attr-defined]
             try:
                 with (contextlib.nullcontext() if self.verbose else contextlib.redirect_stdout(buf)):
                     df = self._apply(step, df, mode, target)
@@ -380,7 +388,7 @@ class Pipeline:
         fixes = []
         for c, dtype in df.schema.items():
             if dtype == pl.Null and c in (self.input_schema_ or {}):
-                wanted = _parse_dtype(self.input_schema_[c])
+                wanted = _parse_dtype((self.input_schema_ or {})[c])
                 if wanted is not None:
                     fixes.append(pl.col(c).cast(wanted))
         return df.with_columns(fixes) if fixes else df
@@ -436,7 +444,7 @@ class Pipeline:
     # -- config & persistence ----------------------------------------------
     def to_config(self) -> dict:
         """The pipeline's recipe (steps + params), without learned state."""
-        cfg = {"name": self.name, "on_schema_mismatch": self.on_schema_mismatch}
+        cfg: dict[str, Any] = {"name": self.name, "on_schema_mismatch": self.on_schema_mismatch}
         if self.target:
             cfg["target"] = self.target
         cfg["steps"] = [s.to_dict(include_state=False) for s in self.steps]

@@ -14,6 +14,8 @@ import datetime as _dt
 import re
 from decimal import Decimal
 
+from typing import cast
+
 import polars as pl
 
 from ._util import build_select
@@ -39,7 +41,8 @@ class SnowflakeSource:
     def __init__(self, *, connection=None, **connect_kwargs):
         if connection is None:
             connector = _need("snowflake.connector", "snowflake")
-            connection = connector.connect(**connect_kwargs)
+            from ..secretstore import resolve
+            connection = connector.connect(**{k: resolve(v) for k, v in connect_kwargs.items()})
         self._conn = connection
         self._account = connect_kwargs.get("account")
 
@@ -51,7 +54,7 @@ class SnowflakeSource:
             table = cur.fetch_arrow_all()
             if table is None:                                      # no rows
                 return pl.DataFrame({d[0]: [] for d in cur.description or []})
-            return pl.from_arrow(table)
+            return cast(pl.DataFrame, pl.from_arrow(table))
         finally:
             cur.close()
 
@@ -115,7 +118,7 @@ class BigQuerySource:
             sql = _NAMED.sub(lambda m: f"@{m[1]}", sql)          # bigquery: named @params
             config = bigquery.QueryJobConfig(query_parameters=[_bq_param(bigquery, k, v) for k, v in params.items()])
         job = self._client.query(sql, job_config=config, location=self.location)
-        return pl.from_arrow(job.to_arrow())
+        return cast(pl.DataFrame, pl.from_arrow(job.to_arrow()))
 
     def read_table(self, table: str, **kw) -> pl.DataFrame:
         return self.query(*build_select(table, quote=self.quote, **kw))

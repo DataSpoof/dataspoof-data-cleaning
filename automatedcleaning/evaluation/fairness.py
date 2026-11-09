@@ -342,6 +342,7 @@ def fairness_report(model, df, sensitive, *, target: str | None = None, pos_labe
         if threshold is not None:
             if ad.task != "binary":
                 raise ValueError("threshold only applies to binary classification.")
+            assert pos is not None
             pred = np.where(proba[:, pos] >= threshold, pos, 1 - pos)
         else:
             pred = ad.predict(X)

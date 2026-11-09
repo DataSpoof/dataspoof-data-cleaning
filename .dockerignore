@@ -1,0 +1,11 @@
+# Only the source needed to build the package goes into Docker build contexts.
+**
+!Cargo.toml
+!pyproject.toml
+!README.md
+!src/**
+!automatedcleaning/**
+**/__pycache__
+**/*.pyc
+**/*.pyd
+**/*.so

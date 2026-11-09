@@ -3,6 +3,8 @@ validation, a data-contract check, lineage and an audit record."""
 
 from __future__ import annotations
 
+from typing import Any
+
 import dataclasses
 import time
 
@@ -57,9 +59,9 @@ class IngestResult:
     schema: dict
     casts: dict
     fingerprint: dict
-    contract: object = None
+    contract: Any = None
     quality: dict | None = None
-    types_pipeline: object = None
+    types_pipeline: Any = None
 
     @property
     def passed(self) -> bool:

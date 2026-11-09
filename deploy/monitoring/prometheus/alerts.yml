@@ -1,0 +1,117 @@
+# Prometheus alert rules for AutomatedCleaning model services (the REST API's /metrics).
+# Validate:   promtool check rules alerts.yml
+# Unit tests: promtool test rules alerts_test.yml
+# Thresholds are starting points; tune them per model (labels: model, version, variant).
+groups:
+  - name: automatedcleaning-service
+    rules:
+      - alert: ACModelServiceDown
+        expr: up{job="automatedcleaning"} == 0
+        for: 2m
+        labels: {severity: critical, team: ml-platform}
+        annotations:
+          summary: "Model service {{ $labels.instance }} is down"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} for 2 minutes."
+
+      - alert: ACHighErrorRate
+        expr: |
+          sum by (model) (rate(ac_requests_total{route="predict",status=~"5.."}[5m]))
+            / sum by (model) (rate(ac_requests_total{route="predict"}[5m])) > 0.02
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.model }}: {{ $value | humanizePercentage }} of predictions fail (5xx)"
+
+      - alert: ACHighRejectRate
+        expr: |
+          sum by (model) (rate(ac_requests_total{route="predict",status=~"4.."}[10m]))
+            / sum by (model) (rate(ac_requests_total{route="predict"}[10m])) > 0.10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.model }}: {{ $value | humanizePercentage }} of requests rejected (4xx) - a client may send a changed schema"
+
+      - alert: ACHighLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum by (le, model) (rate(ac_predict_duration_seconds_bucket[5m]))) > 0.5
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.model }}: p95 latency {{ $value | humanizeDuration }}"
+
+      - alert: ACNoTraffic
+        expr: |
+          sum by (model) (rate(ac_requests_total{route="predict"}[30m])) == 0
+            and sum by (model) (increase(ac_requests_total{route="predict"}[1d])) > 0
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.model }} received no prediction requests for 30 minutes (it had traffic today)"
+
+      - alert: ACModelReloadFailed
+        expr: increase(ac_model_reloads_total{result="failed"}[15m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.model }}: a hot reload failed; the previous version is still being served"
+
+      - alert: ACShadowDisagreement
+        expr: |
+          sum by (model) (rate(ac_shadow_predictions_total{result="disagree"}[30m]))
+            / sum by (model) (rate(ac_shadow_predictions_total[30m])) > 0.2
+        for: 30m
+        labels: {severity: info}
+        annotations:
+          summary: "{{ $labels.model }}: the shadow model disagrees on {{ $value | humanizePercentage }} of predictions"
+
+  - name: automatedcleaning-model-quality
+    rules:
+      - alert: ACDataDrift
+        expr: max by (model) (ac_drift_share) >= 0.3
+        for: 15m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.model }}: {{ $value | humanizePercentage }} of input columns drifted strongly - consider retraining"
+
+      - alert: ACFeatureDrift
+        expr: max by (model, feature) (ac_feature_psi) >= 0.25
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.model }}: feature {{ $labels.feature }} drifted (PSI {{ $value | printf \"%.2f\" }})"
+
+      - alert: ACPredictionDrift
+        expr: max by (model) (ac_prediction_psi) >= 0.2
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.model }}: prediction distribution shifted (PSI {{ $value | printf \"%.2f\" }})"
+
+      - alert: ACEstimatedPerformanceDrop
+        expr: min by (model, metric) (ac_performance_change{kind="estimated", metric!~"mae|rmse"}) < -0.05
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.model }}: estimated {{ $labels.metric }} fell by {{ $value | printf \"%.3f\" }} (before labels arrive)"
+
+      - alert: ACEstimatedErrorIncrease
+        expr: max by (model, metric) (ac_performance_change{kind="estimated", metric=~"mae|rmse"}) > 0.10
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.model }}: estimated {{ $labels.metric }} rose {{ $value | humanizePercentage }}"
+
+      - alert: ACLiveAccuracyDrop
+        expr: |
+          min by (model) (ac_live_accuracy)
+            < on (model) max by (model) (ac_reference_metric{metric="accuracy"}) - 0.05
+        for: 30m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.model }}: accuracy on real outcomes is {{ $value | humanizePercentage }}, more than 5 points below validation"
+
+      - alert: ACMonitorCritical
+        expr: sum by (model, kind) (ac_monitor_alerts{severity="critical"}) > 0
+        for: 15m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.model }}: the monitor raised a critical {{ $labels.kind }} alert"

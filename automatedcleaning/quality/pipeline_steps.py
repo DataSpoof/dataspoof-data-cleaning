@@ -66,7 +66,7 @@ class ValidateContract(Step):
 
     @property
     def contract(self) -> Contract:
-        return Contract.from_dict(self.state_["contract"])
+        return Contract.from_dict((self.state_ or {})["contract"])
 
     def _transform(self, df):
         result = self.contract.validate(df)

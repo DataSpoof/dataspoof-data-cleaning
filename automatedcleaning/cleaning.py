@@ -12,56 +12,118 @@ from typing import Dict, List
 import pandas as pd
 import polars as pl
 
-# === NLP & Text Processing ===
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-
-# === Visualization ===
-import matplotlib.pyplot as plt
-import missingno as msno
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
+# === Optional, heavier dependencies: imported on first use (see the extras in pyproject) ===
+import difflib
+import functools
+import getpass
+import importlib
 
 # === Sklearn ===
 from sklearn.impute import KNNImputer
-
-# === PII Detection (Presidio) ===
-from presidio_analyzer import AnalyzerEngine
-from presidio_anonymizer import AnonymizerEngine
-
-# === Other Libraries ===
-from langchain_anthropic import ChatAnthropic
-import difflib
-import pyfiglet
-import getpass
 
 # === Rust compute backend ===
 # CPU-bound work (text cleaning, symbol stripping, IQR outliers, skewness,
 # correlation/multicollinearity, JSON detection) is delegated to this compiled
 # Rust extension for speed and real (GIL-free) parallelism.
 from . import _rustcore
+from .core import AutomatedCleaningWarning as _ACWarning
 
-# === Setup & Logging Cleanup ===
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore")
-# ...but never hide this library's own warnings (leakage, schema drift, failed services).
-from .core import AutomatedCleaningWarning as _ACWarning  # noqa: E402
-warnings.filterwarnings("default", category=_ACWarning)
-# Quiet noisy third-party loggers only; the application's own (root) logging is left alone.
-for _noisy in ("presidio-analyzer", "presidio_analyzer", "presidio-anonymizer", "presidio_anonymizer"):
-    logging.getLogger(_noisy).setLevel(logging.ERROR)
-nltk.download('punkt', quiet=True)
-nltk.download('stopwords', quiet=True)
-nltk.download('wordnet', quiet=True)  # required by the WordNet lemmatizer
-nltk_logger = logging.getLogger('nltk')
-nltk_logger.setLevel(logging.ERROR)
+_EXTRA_FOR = {"nltk": "nlp", "matplotlib": "dashboard", "missingno": "dashboard", "plotly": "dashboard",
+              "pyfiglet": "dashboard", "presidio_analyzer": "pii", "presidio_anonymizer": "pii",
+              "langchain_anthropic": "llm"}
 
 
-# English stopword list, materialised once and reused by the Rust text backend.
-_STOPWORDS = list(stopwords.words("english"))
+def _require(module: str):
+    """Import an optional dependency, or explain which extra installs it."""
+    try:
+        return importlib.import_module(module)
+    except ImportError as exc:
+        extra = _EXTRA_FOR.get(module.split(".")[0], "all")
+        raise ImportError(f"This feature needs '{module.split('.')[0]}': "
+                          f'pip install "AutomatedCleaning[{extra}]"  (or [all])') from exc
+
+
+class _Lazy:
+    """A module that is imported the first time one of its attributes is used."""
+
+    def __init__(self, module: str):
+        self._module, self._mod = module, None
+
+    def __getattr__(self, name):
+        if self._mod is None:
+            self._mod = _require(self._module)
+        return getattr(self._mod, name)
+
+
+plt = _Lazy("matplotlib.pyplot")
+msno = _Lazy("missingno")
+px = _Lazy("plotly.express")
+go = _Lazy("plotly.graph_objects")
+
+
+def _quiet(fn):
+    """Silence noisy third-party warnings while the interactive helpers run (only then:
+    importing the library never changes the application's warning filters)."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            warnings.simplefilter("default", _ACWarning)
+            for noisy in ("presidio-analyzer", "presidio_analyzer", "presidio-anonymizer", "presidio_anonymizer"):
+                logging.getLogger(noisy).setLevel(logging.ERROR)
+            return fn(*args, **kwargs)
+    return wrapper
+
+
+# A standard English stopword list, used when NLTK's corpus isn't available (offline installs).
+_FALLBACK_STOPWORDS = """i me my myself we our ours ourselves you you're you've you'll you'd your yours yourself
+yourselves he him his himself she she's her hers herself it it's its itself they them their theirs themselves what
+which who whom this that that'll these those am is are was were be been being have has had having do does did doing a
+an the and but if or because as until while of at by for with about against between into through during before after
+above below to from up down in out on off over under again further then once here there when where why how all any both
+each few more most other some such no nor not only own same so than too very s t can will just don don't should
+should've now d ll m o re ve y ain aren aren't couldn couldn't didn didn't doesn doesn't hadn hadn't hasn hasn't haven
+haven't isn isn't ma mightn mightn't mustn mustn't needn needn't shan shan't shouldn shouldn't wasn wasn't weren weren't
+won won't wouldn wouldn't""".split()
+
+
+@functools.lru_cache(maxsize=1)
+def _stopwords() -> tuple:
+    """NLTK's English stopwords if installed (downloaded once, on first use; never when the
+    AC_OFFLINE environment variable is set), else the built-in list."""
+    try:
+        nltk = importlib.import_module("nltk")
+        logging.getLogger("nltk").setLevel(logging.ERROR)
+        try:
+            from nltk.corpus import stopwords
+            return tuple(stopwords.words("english"))
+        except LookupError:
+            if os.environ.get("AC_OFFLINE"):
+                raise
+            nltk.download("stopwords", quiet=True)
+            from nltk.corpus import stopwords
+            return tuple(stopwords.words("english"))
+    except Exception:
+        return tuple(_FALLBACK_STOPWORDS)
+
+
+@functools.lru_cache(maxsize=1)
+def _lemmatizer():
+    """WordNet lemmatizer if NLTK + WordNet are available; otherwise words are left as they are."""
+    try:
+        nltk = importlib.import_module("nltk")
+        from nltk.stem import WordNetLemmatizer
+        lem = WordNetLemmatizer()
+        try:
+            lem.lemmatize("tests")
+        except LookupError:
+            if os.environ.get("AC_OFFLINE"):
+                raise
+            nltk.download("wordnet", quiet=True)
+            lem.lemmatize("tests")
+        return lem.lemmatize
+    except Exception:
+        return lambda word: word
 
 
 def _to_f64_list(series):
@@ -85,7 +147,10 @@ def print_section_header(title):
 
 def print_header(title):
     """Prints a formatted section header with ASCII art font centered in the terminal."""
-    ascii_banner = pyfiglet.figlet_format(title, font="slant")  # Choose a large font
+    try:
+        ascii_banner = importlib.import_module("pyfiglet").figlet_format(title, font="slant")
+    except ImportError:                                    # plain banner without the [dashboard] extra
+        ascii_banner = f"== {title} =="
     terminal_width = shutil.get_terminal_size().columns  # Get terminal width
 
     # Split the banner into lines and center each line
@@ -156,10 +221,10 @@ def preprocess_text(text, remove_stopwords=True):
     """
     if text is None or not isinstance(text, str):
         return ""
-    stop = _STOPWORDS if remove_stopwords else []
+    stop = list(_stopwords()) if remove_stopwords else []
     cleaned = _rustcore.preprocess_texts([text], stop, remove_stopwords)[0]
-    lemmatizer = WordNetLemmatizer()
-    return " ".join(lemmatizer.lemmatize(word) for word in cleaned.split())
+    lemmatize = _lemmatizer()
+    return " ".join(lemmatize(word) for word in cleaned.split())
 
 
 
@@ -250,9 +315,9 @@ def detect_column_types_and_process_text(df):
             text_cols.add(col)
             # Batch the whole column through the Rust backend in one call
             # (parallel, GIL released), then lemmatize in Python for parity.
-            cleaned = _rustcore.preprocess_texts(df[col].to_list(), _STOPWORDS, True)
-            lemmatizer = WordNetLemmatizer()
-            processed = [" ".join(lemmatizer.lemmatize(w) for w in c.split()) for c in cleaned]
+            cleaned = _rustcore.preprocess_texts(df[col].to_list(), list(_stopwords()), True)
+            lemmatize = _lemmatizer()
+            processed = [" ".join(lemmatize(w) for w in c.split()) for c in cleaned]
             df = df.with_columns(pl.Series(col, processed))
  
             
@@ -452,8 +517,9 @@ def fix_spelling_errors_in_categorical(df):
     method_choice = input("Choose correction method: (1) Automatic (Claude AI) (2) Manual: ").strip()
     
     if method_choice == "1":
-        api_key = getpass.getpass("Enter your Claude API key: ")
-        model = ChatAnthropic(model="claude-3-7-sonnet-latest", api_key=api_key)
+        ChatAnthropic = _require("langchain_anthropic").ChatAnthropic
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or getpass.getpass("Enter your Claude API key: ")
+        model = ChatAnthropic(model="claude-opus-5-5", api_key=api_key)
     else:
         model = None  # No AI model needed for manual correction
 
@@ -781,6 +847,7 @@ def save_dashboard(html_content, filename="dashboard.html"):
     with open(os.path.join(OUTPUT_DIR, filename), "w", encoding="utf-8") as f:
         f.write(html_content)
 
+@_quiet
 def generate_dashboard(df: pl.DataFrame, background_image_path: str = None):
     """Render an interactive, enterprise-style EDA dashboard.
 
@@ -1216,8 +1283,8 @@ def detect_and_mask_pii_polars(df: pl.DataFrame, sample_size: int = 10) -> pl.Da
     """
     print_section_header("Checking for any PII types in columns and masking them")
 
-    analyzer = AnalyzerEngine()
-    anonymizer = AnonymizerEngine()
+    analyzer = _require("presidio_analyzer").AnalyzerEngine()
+    anonymizer = _require("presidio_anonymizer").AnonymizerEngine()
     pii_columns: Dict[str, List[str]] = {}
 
     # Step 1: Detect PII columns using sampling
@@ -1264,6 +1331,7 @@ def detect_and_mask_pii_polars(df: pl.DataFrame, sample_size: int = 10) -> pl.Da
 
 
 
+@_quiet
 def clean_data(df, background_image_path=None):
     """Main function to clean the data."""
     df = detect_column_types_and_process_text(df)

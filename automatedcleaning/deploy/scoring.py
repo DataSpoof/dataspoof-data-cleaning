@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import time
 from pathlib import Path
 
@@ -62,10 +64,9 @@ def score(model, df, *, proba: bool = True, keep: list | None = None, prefix: st
     if isinstance(model, AutoCluster):
         cols = [pl.Series(f"{prefix}cluster", model.predict(df).to_numpy())]
     else:
-        pred = model.predict(df)
+        pred, p = model.predict_with_proba(df)
         cols = [pred.alias(f"{prefix}prediction")]
-        if proba and model.classes_ is not None:
-            p = model.predict_proba(df)
+        if proba and p is not None:
             cols += [p[c].alias(f"{prefix}{c}") for c in p.columns]
     return out.hstack(cols) if out.width else pl.DataFrame(cols)
 
@@ -123,7 +124,9 @@ def batch_score(model, source, output, *, chunk_size: int = 100_000, keep: list 
     tmp = output.with_name(output.name + ".partial")
     tmp.unlink(missing_ok=True)
     t0, rows, chunks = time.perf_counter(), 0, 0
-    writer, missing, dist = None, None, {}
+    writer: Any = None
+    missing: list | None = None
+    dist: dict = {}
     try:
         for chunk in _batches(source, chunk_size):
             if missing is None:

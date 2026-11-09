@@ -9,6 +9,8 @@ standard environment variables (``AWS_ACCESS_KEY_ID``/``AWS_PROFILE``,
 
 from __future__ import annotations
 
+from typing import Any
+
 import glob as _glob
 import io
 import urllib.request
@@ -56,7 +58,7 @@ def _http_bytes(url: str, headers: dict | None = None, timeout: float = 60) -> b
 
 def _eager(fmt: str, src, kw: dict) -> pl.DataFrame:
     if fmt in ("csv", "tsv"):
-        return pl.read_csv(src, **({"separator": "\t"} if fmt == "tsv" else {}), **kw)
+        return pl.read_csv(src, **{"separator": "\t" if fmt == "tsv" else ",", **kw})
     if fmt == "parquet":
         return pl.read_parquet(src, **kw)
     if fmt == "ndjson":
@@ -78,9 +80,9 @@ def _eager(fmt: str, src, kw: dict) -> pl.DataFrame:
 
 
 def _scan(fmt: str, path: str, storage_options, kw: dict) -> pl.LazyFrame:
-    opts = {"storage_options": storage_options} if storage_options else {}
+    opts: dict[str, Any] = {"storage_options": storage_options} if storage_options else {}
     if fmt in ("csv", "tsv"):
-        return pl.scan_csv(path, **({"separator": "\t"} if fmt == "tsv" else {}), **opts, **kw)
+        return pl.scan_csv(path, **{"separator": "\t" if fmt == "tsv" else ",", **opts, **kw})
     if fmt == "parquet":
         return pl.scan_parquet(path, **opts, **kw)
     if fmt == "ndjson":

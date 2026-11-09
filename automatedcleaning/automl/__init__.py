@@ -14,16 +14,25 @@ from .models import available_models
 from .tasks import TaskInfo, detect_task
 
 
-def load_model(path):
-    """Load any saved AutoML / AutoCluster model directory (the checksum is verified first)."""
+def load_model(path, *, public_key=None):
+    """Load any saved AutoML / AutoCluster model directory (the checksum is verified first).
+
+    With ``public_key`` (or the ``AC_MODEL_PUBLIC_KEY`` environment variable) the model's
+    Ed25519 signature is verified before anything is unpickled (see ``security.sign_model``)."""
     import json
     from pathlib import Path
+
+    from ..security import verify_if_required
+    verify_if_required(path, public_key)
     manifest = json.loads((Path(path) / "manifest.json").read_text(encoding="utf-8"))
     kind = manifest.get("kind")
     if kind == "supervised":
         return AutoML.load(path)
     if kind == "clustering":
         return AutoCluster.load(path)
+    if kind == "forecast":
+        from ..forecast import Forecaster
+        return Forecaster.load(path)
     raise ValueError(f"{path} is not a saved automatedcleaning model")
 
 

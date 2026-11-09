@@ -15,6 +15,8 @@ same rows instead of silently skipping them. Two runners can't commit over each 
 
 from __future__ import annotations
 
+from typing import Any
+
 import contextlib
 import dataclasses
 import datetime as _dt
@@ -84,7 +86,8 @@ class IncrementalLoader:
             df = self.source(watermark)
             df = df if isinstance(df, pl.DataFrame) else pl.from_pandas(df)
             if watermark is not None and df.height:
-                df = df.filter(pl.col(self.cursor) >= watermark if inclusive else pl.col(self.cursor) > watermark)
+                cur = str(self.cursor)
+                df = df.filter(pl.col(cur) >= watermark if inclusive else pl.col(cur) > watermark)
             return df.sort(self.cursor)
         return self.source.read_table(self.table, columns=self.columns, since=(self.cursor, watermark, inclusive),
                                       order_by=self.cursor, limit=self.batch_limit, **self.read_kw)
@@ -93,8 +96,8 @@ class IncrementalLoader:
         """Fetch the next batch without committing it (see :meth:`commit`)."""
         from .files import list_files, read_file
         state = self.state()
-        info = {"time": now()}
-        new_state = {**state, "history": list(state.get("history", []))[-49:]}
+        info: dict[str, Any] = {"time": now()}
+        new_state: dict[str, Any] = {**state, "history": list(state.get("history", []))[-49:]}
         if self.files is not None:
             seen = state.get("files", {})
             fresh, sigs = [], {}
@@ -121,7 +124,7 @@ class IncrementalLoader:
             if df.height:
                 top = df[self.cursor].max()
                 new_state["watermark"] = to_json_value(top)
-                keys = df.filter(pl.col(self.cursor) == top).select(self.key).rows() if self.key else []
+                keys = df.filter(pl.col(str(self.cursor)) == top).select(self.key).rows() if self.key else []
                 carry = state.get("boundary_keys", []) if from_json_value(state.get("watermark")) == top else []
                 new_state["boundary_keys"] = [list(k) for k in {tuple(k) for k in carry} | set(keys)]
             info["watermark_from"] = state.get("watermark")

@@ -1,0 +1,138 @@
+site_name: AutomatedCleaning
+site_description: Automated data science, from raw data to monitored production models.
+site_url: https://dataspoof.github.io/dataspoof-data-cleaning/
+repo_url: https://github.com/DataSpoof/dataspoof-data-cleaning
+repo_name: DataSpoof/dataspoof-data-cleaning
+edit_uri: edit/main/docs/
+copyright: MIT © Abhishek Kumar Singh / DataSpoof
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            members_order: source
+            filters: ["!^_"]
+            show_signature_annotations: true
+            separate_signature: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Workflow: workflow.md
+  - Installation: installation.md
+  - User guide:
+      - Ingestion & connectors: guide/ingestion.md
+      - Data cleaning: guide/cleaning.md
+      - Profiling & data quality: guide/quality.md
+      - Feature engineering: guide/features.md
+      - AutoML: guide/automl.md
+      - Evaluation & explainability: guide/evaluation.md
+      - Tracking & registry: guide/registry.md
+      - Deployment: guide/deployment.md
+      - Monitoring: guide/monitoring.md
+      - Insights & reporting: guide/insights.md
+      - Hub (platform server): guide/hub.md
+      - Forecasting: guide/forecasting.md
+      - Causal & uplift: guide/causal.md
+      - Anomaly detection: guide/anomaly.md
+      - Integrations & scale: guide/integrations.md
+      - Image & audio data: guide/media.md
+      - Statistical testing: guide/stats.md
+      - Data versioning: guide/versioning.md
+      - Feature store: guide/feature-store.md
+      - Data splitting: guide/splitting.md
+      - Model security: guide/model-security.md
+      - Environments & CI/CD: guide/environments-cicd.md
+      - Secrets & policy: guide/secrets-policy.md
+      - Observability: guide/observability.md
+      - Lineage & catalogs: guide/lineage.md
+      - Deploy on AWS: guide/aws.md
+  - API reference:
+      - Ingestion: reference/ingestion.md
+      - Pipeline core: reference/core.md
+      - Cleaning steps: reference/cleaners.md
+      - Data quality: reference/quality.md
+      - Features: reference/features.md
+      - AutoML: reference/automl.md
+      - Evaluation: reference/evaluation.md
+      - Registry: reference/registry.md
+      - Deployment: reference/deploy.md
+      - Monitoring: reference/monitoring.md
+      - Insights: reference/insights.md
+      - Hub: reference/hub.md
+      - Forecasting: reference/forecast.md
+      - Causal & uplift: reference/causal.md
+      - Anomaly detection: reference/anomaly.md
+      - Scale: reference/scale.md
+      - Model signing: reference/security.md
+      - Integrations: reference/integrations.md
+      - Image & audio: reference/media.md
+      - Statistical testing: reference/stats.md
+      - Data versioning: reference/versioning.md
+      - Feature store: reference/feature_store.md
+      - Data splitting: reference/splitting.md
+      - Robustness: reference/robustness.md
+      - Poisoning detection: reference/poisoning.md
+      - Environments: reference/environments.md
+      - CI/CD: reference/cicd.md
+      - Secrets: reference/secretstore.md
+      - Lineage: reference/lineage.md
+  - Architecture: architecture.md
+  - Project:
+      - Changelog: changelog.md
+      - Versioning & support: policies.md
+      - Security: security.md
+      - Contributing: contributing.md

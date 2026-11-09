@@ -1,10 +1,11 @@
-# Build abi3 wheels for Linux / macOS / Windows and publish to PyPI.
+# Test, type-check, audit, build wheels for Linux / macOS / Windows, and publish to PyPI.
 #
-# - On every push / PR: build wheels + sdist so breakage is caught early.
-# - On a pushed tag (e.g. `v2.0.0`): also publish to PyPI via Trusted Publishing.
+# - Every push / PR: tests (OS x Python x Polars matrix), mypy, dependency + Rust audits,
+#   wheels and sdist, so breakage is caught before a release.
+# - A pushed version tag (e.g. `v2.0.0`): also publish to PyPI with Trusted Publishing (no
+#   API token) and signed build-provenance attestations, plus a CycloneDX SBOM on the release.
 #
-# Because the crate is built with pyo3's `abi3-py311` feature, a single wheel per
-# platform works on CPython 3.11 and every newer 3.x — no per-version matrix.
+# The crate uses pyo3's `abi3-py311` feature, so one wheel per platform covers CPython 3.11+.
 
 name: CI
 
@@ -18,7 +19,140 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }}, polars ${{ matrix.polars }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.11", "3.12", "3.13"]
+        polars: ["1", "2"]
+        include:
+          - { os: windows-latest, python: "3.12", polars: "2" }
+          - { os: macos-latest, python: "3.12", polars: "2" }
+    env:
+      AC_OFFLINE: "1"            # the library must work without network access
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install (builds the Rust extension)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[test,sql,excel,server,optuna,skops,signing]" "polars==${{ matrix.polars }}.*"
+      - name: Run tests
+        # Run against the installed package (not the source tree) so packaging bugs show up.
+        run: |
+          mkdir _run
+          cp -r tests _run/
+          if [ -f titanic.csv ]; then cp titanic.csv _run/; fi
+          cd _run
+          python -m pytest tests -q -p no:cacheprovider -o pythonpath=
+
+  core-only:
+    name: test (core install, no extras)
+    runs-on: ubuntu-latest
+    env:
+      AC_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - run: python -m pip install . pytest
+      - name: Import must not load heavy optional packages or touch the network
+        run: |
+          cd /tmp && python -c "
+          import sys, automatedcleaning
+          heavy = [m for m in ('nltk','plotly','matplotlib','presidio_analyzer','langchain_anthropic') if m in sys.modules]
+          assert not heavy, heavy
+          print('ok')"
+      - run: mkdir _run && cp -r tests _run/ && cd _run && python -m pytest tests -q -p no:cacheprovider -o pythonpath=
+
+  integrations:
+    # Real MLflow server + `mlflow models serve`, real git/DVC with a remote, real Feast.
+    name: test (real MLflow, DVC, Feast)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: python -m pip install ".[test,mlflow,dvc,feast,evidently,aws,server,signing]" "moto[server]"
+      - run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          mkdir _run
+          cp -r tests _run/
+          cd _run
+          python -m pytest -q -p no:cacheprovider -o pythonpath= -rs tests/test_real_integrations.py \
+            tests/test_aws_deploy.py tests/test_lineage_and_catalogs.py tests/test_secretstore.py \
+            tests/test_label_free_monitoring.py
+
+  docker-stacks:
+    # Real Prometheus + Grafana, Vault, OPA (+ `opa test`, `promtool test rules`), Marquez, actionlint.
+    name: test (Prometheus, Grafana, Vault, OPA, Marquez in Docker)
+    runs-on: ubuntu-latest
+    env:
+      AC_DOCKER_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: python -m pip install ".[test,server]"
+      - run: python -m pytest tests/test_docker_stacks.py -q -p no:cacheprovider -rs
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install mypy polars numpy pandas
+      - run: python -m mypy
+
+  security:
+    name: security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Python dependency vulnerabilities (pip-audit)
+        run: |
+          python -m pip install pip-audit
+          python -m pip install ".[all]"
+          pip-audit --skip-editable --progress-spinner off
+      - name: Rust dependency vulnerabilities (cargo audit)
+        run: |
+          cargo install cargo-audit --locked
+          cargo generate-lockfile
+          cargo audit
+
   linux:
     runs-on: ubuntu-latest
     strategy:
@@ -37,34 +171,28 @@ jobs:
           args: --release --out dist
           sccache: "true"
           manylinux: auto
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist
 
   windows:
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [x64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          architecture: ${{ matrix.target }}
+          architecture: x64
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
+          target: x64
           args: --release --out dist
           sccache: "true"
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels-windows-${{ matrix.target }}
+          name: wheels-windows-x64
           path: dist
 
   macos:
@@ -84,8 +212,7 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist
           sccache: "true"
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: wheels-macos-${{ matrix.target }}
           path: dist
@@ -99,35 +226,46 @@ jobs:
         with:
           command: sdist
           args: --out dist
-      - name: Upload sdist
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: wheels-sdist
           path: dist
 
-  # Publishes to PyPI only when a version tag (v*) is pushed.
+  # Publishes only when a version tag (v*) is pushed, and only if every check passed.
   release:
     name: Release to PyPI
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, windows, macos, sdist]
+    needs: [test, core-only, typecheck, security, linux, windows, macos, sdist]
     environment:
       name: pypi
       url: https://pypi.org/project/AutomatedCleaning/
     permissions:
-      # Required for PyPI Trusted Publishing (OIDC) — no API token needed.
-      id-token: write
+      id-token: write          # PyPI Trusted Publishing (OIDC) + Sigstore signing
+      attestations: write      # build-provenance attestations
+      contents: write          # attach the SBOM to the GitHub release
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           pattern: wheels-*
           merge-multiple: true
           path: dist
+      - name: Build provenance attestation (signed, verifiable with `gh attestation verify`)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+      - name: Software bill of materials (CycloneDX)
+        run: |
+          python -m pip install cyclonedx-bom
+          python -m pip install dist/*manylinux*x86_64*.whl
+          cyclonedx-py environment --of JSON -o sbom.cdx.json
       - name: Publish to PyPI
-        # Official PyPA action — performs the OIDC token exchange for
-        # Trusted Publishing. skip-existing avoids clobbering wheels/sdist
-        # already uploaded for this version.
+        # Trusted Publishing; also uploads PEP 740 attestations for every file.
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+      - name: GitHub release with SBOM
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* sbom.cdx.json --generate-notes --verify-tag || gh release upload "${GITHUB_REF_NAME}" sbom.cdx.json --clobber

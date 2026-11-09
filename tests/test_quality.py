@@ -323,6 +323,7 @@ def test_quality_gate():
 # ── dashboard integration ────────────────────────────────────────────────────
 
 def test_dashboard_renders_score_and_issues_from_quality_module(tmp_path, monkeypatch, messy):
+    pytest.importorskip("plotly")           # the dashboard needs the [dashboard] extra
     monkeypatch.chdir(tmp_path)
     df = messy.with_columns(pl.Series("notes", [None] * 100 + ["x"] * 20))   # a weak column
     ac.generate_dashboard(df)

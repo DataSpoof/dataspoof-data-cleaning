@@ -40,7 +40,7 @@ class InsightsReport:
     def _blocks(self) -> list:
         source = ("written by " + self.narrative_source[4:] + " from the findings below"
                   if self.narrative_source.startswith("llm:") else "generated from the findings below")
-        b = [("p", f"Generated {self.generated} by AutomatedCleaning")]
+        b: list[tuple] = [("p", f"Generated {self.generated} by AutomatedCleaning")]
         b.append(("h2", "At a glance"))
         b.append(("kv", self.kpis))
         b.append(("h2", "Summary"))

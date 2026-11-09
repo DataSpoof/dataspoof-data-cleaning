@@ -56,7 +56,7 @@ class EvaluationReport:
             score = self.thresholds[by]
         else:
             raise ValueError("by must be f1, youden, accuracy, precision or recall")
-        return float(self.thresholds["threshold"][int(score.fill_null(-1).arg_max())])
+        return float(self.thresholds["threshold"][int(score.fill_null(-1).arg_max() or 0)])
 
     def summary(self) -> str:
         lines = [f"Evaluation of {self.model} on {self.n_rows:,} rows ({self.task} '{self.target}')"]

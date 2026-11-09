@@ -75,9 +75,10 @@ def _forest(kind):
 def _hgb(p, seed, classify):
     from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
     cls = HistGradientBoostingClassifier if classify else HistGradientBoostingRegressor
+    extra = {"class_weight": p.get("class_weight")} if classify else {}
     return cls(learning_rate=p.get("learning_rate", 0.1), max_iter=p.get("max_iter", 200),
                max_leaf_nodes=p.get("max_leaf_nodes", 31), min_samples_leaf=p.get("min_samples_leaf", 20),
-               l2_regularization=p.get("l2_regularization", 0.0), random_state=seed)
+               l2_regularization=p.get("l2_regularization", 0.0), random_state=seed, **extra)
 
 
 def _knn(p, seed, classify):
@@ -122,7 +123,7 @@ def model_specs(task: str) -> list:
         ModelSpec("hist_gradient_boosting", _hgb,
                   {"learning_rate": ("log", 0.02, 0.3), "max_iter": ("int", 100, 500),
                    "max_leaf_nodes": ("int", 15, 63), "min_samples_leaf": ("int", 5, 50),
-                   "l2_regularization": ("log", 1e-6, 1.0)}, {}),
+                   "l2_regularization": ("log", 1e-6, 1.0), **weight}, {}),
         ModelSpec("random_forest", _forest("rf"), {**_FOREST_SPACE, **weight}, {}),
         ModelSpec("extra_trees", _forest("et"), {**_FOREST_SPACE, **weight}, {}),
         ModelSpec("knn", _knn, {"n_neighbors": ("int", 3, 50), "weights": ("choice", ["uniform", "distance"])},

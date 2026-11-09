@@ -27,6 +27,8 @@ tighten it before enforcing.
 
 from __future__ import annotations
 
+from typing import Any
+
 import dataclasses
 import datetime as _dt
 import difflib
@@ -301,7 +303,9 @@ class Contract:
         rows = df.height or 1
         columns = {}
         for c, dtype in df.schema.items():
-            s, spec, soft = df[c], {}, []
+            s = df[c]
+            spec: dict[str, Any] = {}
+            soft: list = []
             nn = s.drop_nulls()
             spec["type"] = _type_of(dtype)
             null_fraction = s.null_count() / rows

@@ -1,0 +1,8 @@
+{
+  "require_qa": true,
+  "require_signed_production": false,
+  "min_metrics": {},
+  "min_disparate_impact": 0.8,
+  "frozen_workspaces": [],
+  "restricted_workspaces": {}
+}

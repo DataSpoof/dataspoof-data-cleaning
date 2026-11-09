@@ -1,0 +1,3 @@
+# CI/CD
+
+::: automatedcleaning.cicd

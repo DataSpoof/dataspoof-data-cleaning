@@ -67,7 +67,7 @@ def _fences(s: pl.Series, method: str, k: float, lower_q: float, upper_q: float)
         iqr = (hi15 - lo15) / 4.0
         q1, q3 = lo15 + 1.5 * iqr, hi15 - 1.5 * iqr
         return [q1 - k * iqr, q3 + k * iqr]
-    return [float(s.quantile(lower_q)), float(s.quantile(upper_q))]
+    return [float(s.quantile(lower_q) or 0.0), float(s.quantile(upper_q) or 0.0)]
 
 
 def _learn_fences(df, columns, method, k, lower_q, upper_q) -> dict:
@@ -578,7 +578,7 @@ def default_cleaning_pipeline(name: str = "automated-cleaning", *, on_schema_mis
         override = overrides.get(step_name, True)
         if override is False:
             continue
-        merged = {**params, **(override if isinstance(override, dict) else {})}
+        merged = {**params, **(override if isinstance(override, dict) else {})}  # type: ignore[dict-item]
         steps.append({"step": step_name, "params": merged})
     return Pipeline(steps, name=name, on_schema_mismatch=on_schema_mismatch, verbose=verbose,
                     audit_log=audit_log)

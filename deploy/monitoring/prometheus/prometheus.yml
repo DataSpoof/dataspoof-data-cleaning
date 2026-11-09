@@ -1,0 +1,23 @@
+# Scrapes AutomatedCleaning model services (GET /metrics) and loads the alert rules.
+# Replace the target with your service(s); on Kubernetes use kubernetes_sd_configs instead.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: automatedcleaning
+    metrics_path: /metrics
+    # If the service runs with public_metrics=False / AC_PUBLIC_METRICS=0, send the API key:
+    # authorization: {type: ApiKey, credentials_file: /etc/prometheus/model_api_key}   (or a header proxy)
+    # Targets are read from a file (re-read on change, no restart needed). docker-compose.yml writes
+    # it from $MODEL_TARGET; elsewhere use static_configs or kubernetes_sd_configs instead.
+    file_sd_configs:
+      - files: ["/prometheus/targets/*.json"]

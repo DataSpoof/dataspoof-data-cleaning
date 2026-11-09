@@ -1,0 +1,15 @@
+{{- if .Values.artifacts.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hub.fullname" . }}-artifacts
+  labels: {{- include "hub.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteMany]
+  {{- if .Values.artifacts.persistence.storageClass }}
+  storageClassName: {{ .Values.artifacts.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.artifacts.persistence.size }}
+{{- end }}

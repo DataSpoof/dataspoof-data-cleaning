@@ -92,7 +92,7 @@ class Step:
 
     # -- serialisation ------------------------------------------------------
     def to_dict(self, include_state: bool = True) -> dict:
-        d = {"step": self.name, "params": dict(self.params)}
+        d: dict[str, Any] = {"step": self.name, "params": dict(self.params)}
         if self.fit_only != type(self).fit_only:
             d["fit_only"] = self.fit_only
         if include_state:

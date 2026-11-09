@@ -1,4 +1,4 @@
-"""Model registry: versioned models moving through dev → staging → production.
+"""Model registry: versioned models moving through dev → qa → staging → production.
 
 Layout::
 
@@ -19,7 +19,7 @@ import polars as pl
 from ._store import (FileLock, append_jsonl, check_name, dataset_fingerprint, now, read_json, read_jsonl, user,
                      write_json)
 
-STAGES = ("none", "dev", "staging", "production", "archived")
+STAGES = ("none", "dev", "qa", "staging", "production", "archived")
 _OPS = {">=": operator.ge, ">": operator.gt, "<=": operator.le, "<": operator.lt, "==": operator.eq}
 
 
@@ -94,13 +94,16 @@ class ModelRegistry:
 
     # ── registering ─────────────────────────────────────────────────────────
     def register(self, model, name: str, *, run=None, stage: str = "dev", metrics: dict | None = None,
-                 tags: dict | None = None, description: str | None = None, dataset=None) -> ModelVersion:
+                 tags: dict | None = None, description: str | None = None, dataset=None,
+                 sign_with=None, sign_password: str | None = None) -> ModelVersion:
         """Add a new version of model ``name``.
 
         ``model`` is a fitted AutoML / AutoCluster object or a saved model directory.
         Metrics come from ``run`` (a tracked Run) and/or ``metrics``; an AutoML model also
         contributes its cross-validation score. ``dataset`` (a DataFrame) records the training
-        data fingerprint (the run's ``train`` dataset is used otherwise)."""
+        data fingerprint (the run's ``train`` dataset is used otherwise). ``sign_with`` (an
+        Ed25519 private key, see ``automatedcleaning.security``) signs the stored model so
+        deployments can verify it with ``AC_MODEL_PUBLIC_KEY``."""
         if stage not in STAGES or stage == "archived":
             raise ValueError(f"stage must be one of {STAGES[:-1]}")
         base = self._dir(name)
@@ -117,6 +120,9 @@ class ModelRegistry:
             except Exception:
                 shutil.rmtree(vdir, ignore_errors=True)
                 raise
+        if sign_with is not None:
+            from ..security import sign_model
+            sign_model(vdir / "model", sign_with, password=sign_password, signer=user())
         manifest = read_json(vdir / "model" / "manifest.json")
         all_metrics = {}
         if manifest.get("kind") == "supervised":
@@ -152,9 +158,10 @@ class ModelRegistry:
                 stage_of = lambda s: next((v.version for v in reversed(vs) if v.stage == s), None)  # noqa: E731
                 rows.append({"name": d.name, "versions": len(vs), "latest": vs[-1].version,
                              "production": stage_of("production"), "staging": stage_of("staging"),
+                             "qa": stage_of("qa"),
                              "dev": stage_of("dev"), "task": vs[-1].task, "target": vs[-1].target})
         schema = {"name": pl.String, "versions": pl.Int64, "latest": pl.Int64, "production": pl.Int64,
-                  "staging": pl.Int64, "dev": pl.Int64, "task": pl.String, "target": pl.String}
+                  "staging": pl.Int64, "qa": pl.Int64, "dev": pl.Int64, "task": pl.String, "target": pl.String}
         return pl.DataFrame(rows, schema=schema) if rows else pl.DataFrame(schema=schema)
 
     def _versions(self, name: str) -> list:
