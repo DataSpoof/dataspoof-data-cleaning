@@ -2,7 +2,6 @@
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/images/logo.png" alt="MLPilot logo" width="260">
 
 # MLPilot
 
