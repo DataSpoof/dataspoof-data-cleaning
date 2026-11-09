@@ -2,6 +2,7 @@
 
 <div align="center">
 
+![DataSpoof MLPilot](images/mlpilot-banner.png)
 
 # MLPilot
 
