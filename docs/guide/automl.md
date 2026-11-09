@@ -74,5 +74,5 @@ clusters.cluster_profiles(df)                         # size, share and averages
 ac.automl(df)                                         # no target -> AutoCluster; with target= -> AutoML
 ```
 
-Optional extras: `pip install "AutomatedCleaning[automl]"` (LightGBM, XGBoost) and
-`pip install "AutomatedCleaning[embeddings]"` (sentence-transformers).
+Optional extras: `pip install "mlpilot[automl]"` (LightGBM, XGBoost) and
+`pip install "mlpilot[embeddings]"` (sentence-transformers).

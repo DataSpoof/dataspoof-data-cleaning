@@ -1,5 +1,5 @@
 # Cleaning steps
 
-::: automatedcleaning.cleaners
+::: mlpilot.cleaners
     options:
       show_submodules: true

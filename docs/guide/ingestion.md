@@ -24,7 +24,7 @@ result.fingerprint          # shape + schema + content hash (also logged with in
   Credentials come from `storage_options` or the standard environment variables.
 - **Databases:** `SQLSource` takes any SQLAlchemy URL (PostgreSQL, MySQL, SQL Server, Oracle,
   Redshift, DuckDB, …) or any DB-API connection. Install with
-  `pip install "AutomatedCleaning[sql]"` plus your database's driver.
+  `pip install "mlpilot[sql]"` plus your database's driver.
 - **Warehouses:** `SnowflakeSource` (`[snowflake]`) and `BigQuerySource` (`[bigquery]`) use the
   native connectors and fetch results as Arrow.
 - **APIs:** `RESTSource` handles token auth (pass the token, or read it from an environment

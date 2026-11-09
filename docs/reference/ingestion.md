@@ -1,5 +1,5 @@
 # Ingestion & connectors
 
-::: automatedcleaning.ingestion
+::: mlpilot.ingestion
     options:
       show_submodules: true

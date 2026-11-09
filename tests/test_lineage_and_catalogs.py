@@ -11,8 +11,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
-from automatedcleaning.lineage import FileTransport, Lineage, LineageGraph, dataset
+import mlpilot as ac
+from mlpilot.lineage import FileTransport, Lineage, LineageGraph, dataset
 
 
 # ── lineage ─────────────────────────────────────────────────────────────────
@@ -43,12 +43,12 @@ def test_run_events_and_graph(tmp_path):
     assert events[1]["outputs"][0]["name"] == "warehouse.customers_clean"            # added during the run
     assert "ZeroDivisionError" in events[-1]["run"]["facets"]["errorMessage"]["stackTrace"]
     g = LineageGraph.from_file(path)
-    assert g.upstream("models/churn/v4") == ["automatedcleaning:features.customer_stats",
-                                             "automatedcleaning:warehouse.customers_clean",
-                                             "automatedcleaning:warehouse.labels", "s3://raw:customers.csv"]
-    assert g.downstream("automatedcleaning:warehouse.customers_clean") == [
-        "automatedcleaning:features.customer_stats", "automatedcleaning:models/churn/v4"]
-    assert "automatedcleaning:nowhere" not in g.downstream("automatedcleaning:warehouse.customers_clean")  # FAIL: no edge
+    assert g.upstream("models/churn/v4") == ["mlpilot:features.customer_stats",
+                                             "mlpilot:warehouse.customers_clean",
+                                             "mlpilot:warehouse.labels", "s3://raw:customers.csv"]
+    assert g.downstream("mlpilot:warehouse.customers_clean") == [
+        "mlpilot:features.customer_stats", "mlpilot:models/churn/v4"]
+    assert "mlpilot:nowhere" not in g.downstream("mlpilot:warehouse.customers_clean")  # FAIL: no edge
 
 
 def test_tracked_runs_and_dataset_versions(tmp_path):
@@ -67,13 +67,13 @@ def test_tracked_runs_and_dataset_versions(tmp_path):
     assert events[1]["run"]["runId"] == rid and events[1]["eventType"] == "COMPLETE"
     assert events[1]["inputs"][0]["facets"]["version"]["datasetVersion"] == run.datasets[0]["content_hash"]
     assert events[1]["outputs"][0]["name"] == "churn/weekly/model_card.md"
-    assert events[1]["run"]["facets"]["automatedcleaning_run"]["metrics"]["auc"] == 0.8
+    assert events[1]["run"]["facets"]["mlpilot_run"]["metrics"]["auc"] == 0.8
     assert events[3]["outputs"][0]["facets"]["version"]["datasetVersion"].startswith("v1:")
     assert LineageGraph(events).upstream("customers") == ["s3://raw:customers.csv"]
 
 
 def test_transport_failure_never_breaks_the_job(tmp_path):
-    from automatedcleaning.lineage import HttpTransport
+    from mlpilot.lineage import HttpTransport
     lin = Lineage(HttpTransport("http://127.0.0.1:9"), FileTransport(tmp_path / "ok.jsonl"))
     with pytest.warns(Warning, match="not delivered"):
         with lin.run("job"):
@@ -106,7 +106,7 @@ def moto_server():
 def test_glue_catalog_write_read_and_jobs(moto_server):
     import boto3
 
-    from automatedcleaning.integrations import aws_glue as glue
+    from mlpilot.integrations import aws_glue as glue
     kw = dict(endpoint_url=moto_server, region_name="us-east-1")
     boto3.client("s3", **kw).create_bucket(Bucket="lake")
     g = boto3.client("glue", **kw)
@@ -187,7 +187,7 @@ def fake_arm():
 
 
 def test_adf_pipeline_runs(fake_arm, monkeypatch):
-    from automatedcleaning.integrations.azure_data_factory import DataFactory, DataFactoryError
+    from mlpilot.integrations.azure_data_factory import DataFactory, DataFactoryError
     url, state = fake_arm
     monkeypatch.setenv("ADF_TOKEN", "tok-1")
     adf = DataFactory("sub-1", "data-rg", "corp-adf", token="env://ADF_TOKEN", base_url=url)

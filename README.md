@@ -2,17 +2,17 @@
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/images/logo.png" alt="AutomatedCleaning logo" width="260">
+<img src="https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/images/logo.png" alt="MLPilot logo" width="260">
 
-# AutomatedCleaning
+# MLPilot
 
 ### From raw data to a monitored production model — automated, explainable, auditable.
 
-[![PyPI](https://img.shields.io/pypi/v/AutomatedCleaning?color=2f6fde&label=PyPI)](https://pypi.org/project/AutomatedCleaning/)
+[![PyPI](https://img.shields.io/pypi/v/mlpilot?color=2f6fde&label=PyPI)](https://pypi.org/project/mlpilot/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Rust engine](https://img.shields.io/badge/engine-Rust-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Polars](https://img.shields.io/badge/dataframes-Polars-CD792C?logo=polars&logoColor=white)](https://pola.rs/)
-[![Tests](https://img.shields.io/badge/tests-295%20passing-2ea44f)](#%EF%B8%8F-building--contributing)
+[![Tests](https://img.shields.io/badge/tests-298%20passing-2ea44f)](#%EF%B8%8F-building--contributing)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](#-license)
 
 **[Install](#-installation)** ·
@@ -25,19 +25,21 @@
 
 ---
 
-AutomatedCleaning automates the whole data-science lifecycle in one Python library. It covers
+MLPilot automates the whole data-science lifecycle in one Python library. It covers
 ingestion and cleaning, data quality, feature engineering, AutoML, explainability and fairness,
 the model registry, deployment, monitoring, and plain-English insights. A **Rust engine**
 handles the heavy computation, and every stage shares one `fit` / `transform` / `save` contract.
 
+> **AutomatedCleaning is now MLPilot.** Install `mlpilot` and `import mlpilot`. Existing code and saved models keep working: see [Moving from AutomatedCleaning](#moving-from-automatedcleaning).
+
 ## ⚡ Quick start
 
 ```bash
-pip install AutomatedCleaning
+pip install mlpilot
 ```
 
 ```python
-import automatedcleaning as ac
+import mlpilot as ac
 
 df = ac.read("titanic.csv")                                       # 1. ingest
 train, test = df.head(700), df.tail(191)
@@ -123,7 +125,7 @@ and builds an EDA dashboard.
 
 ## 🗺️ How it all fits together
 
-<p align="center"><img src="https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/docs/assets/workflow.svg" alt="AutomatedCleaning workflow: data in, build and validate, release through isolated dev, QA and prod registries, and operate with feedback, monitoring and a retraining loop. Five gates can stop a run." width="100%"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/docs/assets/workflow.svg" alt="MLPilot workflow: data in, build and validate, release through isolated dev, QA and prod registries, and operate with feedback, monitoring and a retraining loop. Five gates can stop a run." width="100%"></p>
 
 Read lane 1 left to right, lane 2 right to left, and so on: the flow snakes down the page.
 
@@ -188,9 +190,9 @@ Also: [Installation](#-installation) · [Why Rust + Python?](#-why-rust--python)
 ## 📦 Installation
 
 ```bash
-pip install AutomatedCleaning                    # lean core (pipelines, quality, features, AutoML, …)
-pip install "AutomatedCleaning[sql,excel]"       # + the extras you need (see below)
-pip install "AutomatedCleaning[all]"             # everything, like 1.x installed by default
+pip install mlpilot                    # lean core (pipelines, quality, features, AutoML, …)
+pip install "mlpilot[sql,excel]"       # + the extras you need (see below)
+pip install "mlpilot[all]"             # everything, like 1.x installed by default
 ```
 
 Since 2.0, the core install no longer pulls in the heavy dependencies (NLTK, Plotly, Presidio,
@@ -198,7 +200,7 @@ LangChain). Those features ask for their extra when you use them. Importing the 
 downloads data, writes files or changes your logging. Set `AC_OFFLINE=1` to guarantee no
 network use at all.
 
-The import name is `automatedcleaning` (`import automatedcleaning as ac`). It needs
+The import name is `mlpilot` (`import mlpilot as ac`). It needs
 **Python 3.11+**.
 
 > **Platform note:** PyPI currently has a prebuilt wheel for **Windows**. On Linux and macOS,
@@ -224,6 +226,39 @@ The import name is `automatedcleaning` (`import automatedcleaning as ac`). It ne
 | `serve` | gunicorn / waitress | production REST serving |
 | `llm` | anthropic, langchain-anthropic | Claude-written narratives and AI categorical fixes |
 | `text` | langdetect, better-profanity, pyspellchecker | language / profanity / spelling steps |
+
+### Moving from AutomatedCleaning
+
+MLPilot is the new name of **AutomatedCleaning** (renamed in 2.1.0, when the library had grown from
+data cleaning into the whole model lifecycle). Nothing else changed.
+
+```bash
+pip uninstall AutomatedCleaning && pip install mlpilot
+```
+
+| Before | Now |
+|---|---|
+| `pip install AutomatedCleaning` | `pip install mlpilot` |
+| `import automatedcleaning as ac` | `import mlpilot as ac` |
+| `automatedcleaning serve ...` (CLI) | `mlpilot serve ...` |
+| `AutomatedCleaningWarning` | `MLPilotWarning` (the old name still works) |
+
+**What keeps working without changes:**
+- **Saved artifacts:** models, registries, monitors and pipelines saved by AutomatedCleaning load
+  as before, including raw pickles that refer to `automatedcleaning.*` classes.
+- **Old imports:** once `mlpilot` is installed, `import automatedcleaning` still works and gives
+  the same library.
+- **Running services:** the `AC_*` environment variables and the `ac_*` Prometheus metrics keep
+  their names, so deployments and dashboards are unaffected.
+- **The old package name:** `pip install AutomatedCleaning` now installs MLPilot through a small
+  forwarding package (2.0.1).
+
+**Renamed with the library:**
+- the OPA policy package (`data.mlpilot`) and the Prometheus job (`mlpilot`);
+- the Helm chart (`mlpilot-hub`);
+- the MLflow tag prefix (`mlpilot.`) and the default OpenLineage namespace.
+
+Update these if you deployed them from 2.0.0.
 
 <details>
 <summary><b>Install from source</b></summary>
@@ -264,7 +299,7 @@ result.fingerprint          # shape + schema + content hash (also logged with in
   Credentials come from `storage_options` or the standard environment variables.
 - **Databases:** `SQLSource` takes any SQLAlchemy URL (PostgreSQL, MySQL, SQL Server, Oracle,
   Redshift, DuckDB, …) or any DB-API connection. Install with
-  `pip install "AutomatedCleaning[sql]"` plus your database's driver.
+  `pip install "mlpilot[sql]"` plus your database's driver.
 - **Warehouses:** `SnowflakeSource` (`[snowflake]`) and `BigQuerySource` (`[bigquery]`) use the
   native connectors and fetch results as Arrow.
 - **APIs:** `RESTSource` handles token auth (pass the token, or read it from an environment
@@ -310,7 +345,7 @@ schema.
 ### Interactive cleaning
 
 ```python
-import automatedcleaning as ac
+import mlpilot as ac
 
 # Load any CSV / TSV / JSON / Parquet file (via Polars)
 df = ac.load_data("dataset.csv")
@@ -331,7 +366,7 @@ no questions, learns its cleaning rules on training data, and replays exactly th
 new data, so a test set or a production batch never influences how it is cleaned.
 
 ```python
-import automatedcleaning as ac
+import mlpilot as ac
 
 pipe = ac.default_cleaning_pipeline()
 train_clean = pipe.fit_transform(train_df)   # learn the rules on training data
@@ -417,7 +452,7 @@ building your own non-interactive pipeline. These delegate to the Rust backend:
 
 ```python
 import polars as pl
-import automatedcleaning as ac
+import mlpilot as ac
 
 df = ac.load_data("dataset.csv")
 
@@ -444,7 +479,7 @@ ac.preprocess_text("I can't wait!! Visit https://x.co @bob 😀 it's GR8")
 ```
 
 <details>
-<summary><b>All additional cleaning steps (<code>automatedcleaning.steps</code>)</b></summary>
+<summary><b>All additional cleaning steps (<code>mlpilot.steps</code>)</b></summary>
 
 
 Beyond the core pipeline, ~45 focused, composable steps are available directly
@@ -486,7 +521,7 @@ Steps that need optional libraries (`detect_language`, `redact_profanity`,
 `correct_spelling_text`) are installed via the extra:
 
 ```bash
-pip install "AutomatedCleaning[text]"
+pip install "mlpilot[text]"
 ```
 
 </details>
@@ -728,8 +763,8 @@ clusters.cluster_profiles(df)                         # size, share and averages
 ac.automl(df)                                         # no target -> AutoCluster; with target= -> AutoML
 ```
 
-Optional extras: `pip install "AutomatedCleaning[automl]"` (LightGBM, XGBoost) and
-`pip install "AutomatedCleaning[embeddings]"` (sentence-transformers).
+Optional extras: `pip install "mlpilot[automl]"` (LightGBM, XGBoost) and
+`pip install "mlpilot[embeddings]"` (sentence-transformers).
 
 <p align="right"><a href="#top">back to top ↑</a></p>
 
@@ -765,7 +800,7 @@ print(exp)                               # global importance (mean |SHAP|) + dir
 exp.global_importance()                  # feature, mean_abs_shap, share, direction
 exp.explain_row(0)                       # "P(Survived = 1) = 0.27 (average 0.42): Pclass = 3 (-0.174), ..."
 exp.for_row(0)                           # contributions for one row, largest first
-exp.to_shap()                            # a shap.Explanation for shap's plots: pip install "AutomatedCleaning[explain]"
+exp.to_shap()                            # a shap.Explanation for shap's plots: pip install "mlpilot[explain]"
 ac.partial_dependence(model, test, "Fare")   # average prediction as one feature varies
 ```
 
@@ -873,24 +908,24 @@ Set `AC_API_KEY` to require an `X-API-Key` header, which is checked in constant 
 sizes are capped. Errors return JSON, and internal errors never leak details. With
 `prediction_log="preds.jsonl"`, every request is logged for monitoring.
 
-In production, run `gunicorn automatedcleaning.deploy.wsgi:app` with `AC_MODEL_PATH` set. Use
-waitress on Windows, and install either with `pip install "AutomatedCleaning[serve]"`.
+In production, run `gunicorn mlpilot.deploy.wsgi:app` with `AC_MODEL_PATH` set. Use
+waitress on Windows, and install either with `pip install "mlpilot[serve]"`.
 
 **Docker.** `build_docker` writes a multi-stage Dockerfile: a non-root user, a health check,
 gunicorn, and the model baked in. The generated image has been built and tested end to end.
 
-**ONNX** (`pip install "AutomatedCleaning[onnx]"`) exports the trained estimator: linear models,
+**ONNX** (`pip install "mlpilot[onnx]"`) exports the trained estimator: linear models,
 random forests, extra trees and voting ensembles. Pass `sample=df` and the export is checked
 against the original model. HistGradientBoosting can't be exported yet because of an upstream
 skl2onnx limitation; the error says so.
 
-**The CLI** (also available as `python -m automatedcleaning.deploy`):
+**The CLI** (also available as `python -m mlpilot.deploy`):
 
 ```bash
-automatedcleaning serve  --model models/titanic --port 8000
-automatedcleaning score  --model models/titanic --input big.csv --output scored.parquet
-automatedcleaning --registry ac_registry docker --model titanic:production --out build/
-automatedcleaning --registry ac_registry monitor --model titanic --monitor monitor.json --input today.csv
+mlpilot serve  --model models/titanic --port 8000
+mlpilot score  --model models/titanic --input big.csv --output scored.parquet
+mlpilot --registry ac_registry docker --model titanic:production --out build/
+mlpilot --registry ac_registry monitor --model titanic --monitor monitor.json --input today.csv
 ```
 
 <p align="right"><a href="#top">back to top ↑</a></p>
@@ -913,9 +948,9 @@ ac.build_docker(model, "build/", target="sagemaker")                       # or 
 - **Observability:** Prometheus metrics at `/metrics`, and optional OpenTelemetry tracing.
 - **Cloud routes:** SageMaker (`/ping`, `/invocations`), Vertex AI (`instances` payloads,
   `$AIP_*` routes) and Azure ML (`/score`). There's also an ASGI app for uvicorn
-  (`automatedcleaning.deploy.asgi:app`).
+  (`mlpilot.deploy.asgi:app`).
 - **Speed:** a single-row prediction takes about 50 ms, down from about 500 ms in 1.x.
-- **Signed models** (`automatedcleaning.security`):
+- **Signed models** (`mlpilot.security`):
   - `sign_model(path, private_key)` signs a saved model with Ed25519.
   - Set `AC_MODEL_PUBLIC_KEY` and every load (the API, batch scoring, the registry) refuses
     models that are unsigned or tampered with. The check runs before anything is unpickled.
@@ -955,7 +990,7 @@ needed.
 ### Incidents and delayed labels
 
 ```python
-from automatedcleaning.monitoring import pagerduty_alert, opsgenie_alert, join_labels, sql_sink
+from mlpilot.monitoring import pagerduty_alert, opsgenie_alert, join_labels, sql_sink
 mon.on_alert(pagerduty_alert(routing_key))       # one incident per model and alert kind (deduplicated)
 mon.on_check(sql_sink(ac.SQLSource(url)))        # every check result -> a warehouse table for BI
 joined = join_labels("preds.jsonl", outcomes, on="order_id")   # labels that arrived days later
@@ -996,7 +1031,7 @@ summary:
   warning.
 - `llm=False` (the default) makes no network calls.
 
-Install the SDK with `pip install "AutomatedCleaning[llm]"`.
+Install the SDK with `pip install "mlpilot[llm]"`.
 
 <p align="right"><a href="#top">back to top ↑</a></p>
 
@@ -1004,16 +1039,16 @@ Install the SDK with `pip install "AutomatedCleaning[llm]"`.
 
 ## 🏛️ 11 · Hub: the platform server
 
-A multi-user server for teams, installed with `pip install "AutomatedCleaning[server]"`:
+A multi-user server for teams, installed with `pip install "mlpilot[server]"`:
 
 ```bash
-automatedcleaning hub create-admin --name admin      # prints an API token once
-automatedcleaning hub serve --host 0.0.0.0 --port 8080
+mlpilot hub create-admin --name admin      # prints an API token once
+mlpilot hub serve --host 0.0.0.0 --port 8080
 # or: docker compose -f deploy/hub/docker-compose.yml up -d   (Hub + PostgreSQL)
 ```
 
 ```python
-from automatedcleaning.hub import HubClient
+from mlpilot.hub import HubClient
 hub = HubClient("https://hub.example.com", token=os.environ["AC_HUB_TOKEN"])
 run = hub.start_run("churn", experiment="weekly", name="automl")
 v = hub.register("churn", "churn-model", model, run_id=run["id"], metrics={"test_roc_auc": 0.91})
@@ -1152,21 +1187,21 @@ The built-in tracker, data repository and feature store need no servers. If your
 runs one of these tools, these bridges move the same objects into it:
 
 ```python
-from automatedcleaning.integrations import mlflow as acm
+from mlpilot.integrations import mlflow as acm
 acm.export_tracker(tracker, tracking_uri="http://mlflow:5000")       # every run: params, metric history, artifacts
 info = acm.log_automl(model, test, experiment="churn", register_as="churn")   # a pyfunc model with a signature
 acm.export_registry(registry, "churn")                                # versions; stages become aliases
 model = acm.load_automl("models:/churn@production")                   # back to an AutoML object
 #   $ mlflow models serve -m models:/churn@production --env-manager local
 
-from automatedcleaning.integrations.dvc import DVCRepo, export_repository
+from mlpilot.integrations.dvc import DVCRepo, export_repository
 repo = DVCRepo.init("ml-data")                                        # git init + dvc init
 repo.add_remote("storage", "s3://bucket/dvc")
 repo.track(df, "data/customers.parquet", message="Q2 refresh", tag="customers-v2", push=True)
 old = repo.read("data/customers.parquet", rev="customers-v1")         # any commit, tag or branch
 export_repository(data_repo, "customers", repo)                       # DataRepository history -> git commits + tags
 
-from automatedcleaning.integrations.feast import export_to_feast, feast_features
+from mlpilot.integrations.feast import export_to_feast, feast_features
 fs = export_to_feast(store, "feast_repo")             # feature_store.yaml + features.py, applied and materialized
 fs.get_historical_features(entity_df, feast_features(store, ["customer_stats:*"])).to_df()
 ```
@@ -1209,7 +1244,7 @@ features.
 ## 🖼️ 16 · Image & audio data
 
 ```python
-from automatedcleaning import media
+from mlpilot import media
 
 scan = media.scan_images("photos/", label_from_folder=True)      # one row per file
 print(media.image_quality_report(scan))   # corrupt, exact & near duplicates, tiny, dark, blurry, mixed modes, imbalance
@@ -1223,7 +1258,7 @@ clips = media.AudioPreprocessor(16000, duration=3.0).transform(audio["path"])   
 feats = media.audio_features(audio["path"])                       # MFCCs + spectral features for AutoML
 ```
 
-**Images** (`pip install "AutomatedCleaning[image]"`):
+**Images** (`pip install "mlpilot[image]"`):
 - Phone-photo rotation (EXIF) is fixed automatically.
 - Near-duplicates are found by perceptual hashing, and blur is measured by the variance of the
   Laplacian.
@@ -1245,7 +1280,7 @@ feats = media.audio_features(audio["path"])                       # MFCCs + spec
 ## 📐 17 · Statistical testing
 
 ```python
-from automatedcleaning import stats
+from mlpilot import stats
 
 stats.compare_groups(df, value="revenue", group="region")
 # -> one-way ANOVA (or Welch / Kruskal-Wallis), omega-squared, Tukey pairwise comparisons, plain English
@@ -1397,12 +1432,12 @@ clean = pois.clean(train_df)
 ## 🚦 22 · Environments & CI/CD
 
 ```bash
-automatedcleaning cicd init --provider github --name churn --data data/train.parquet --target churned
+mlpilot cicd init --provider github --name churn --data data/train.parquet --target churned
 #  -> .github/workflows/model-churn.yml, gates.yml, environments.yml
-automatedcleaning train --data data/train.parquet --target churned --out build/model --group customer_id
-automatedcleaning gate  --model build/model --data build/test.parquet --gates gates.yml     # exit 1 = blocked
-automatedcleaning register --model build/model --registry registry/dev --name churn --metrics build/metrics.json
-automatedcleaning release --config environments.yml --name churn --version 7 --from qa --to prod \
+mlpilot train --data data/train.parquet --target churned --out build/model --group customer_id
+mlpilot gate  --model build/model --data build/test.parquet --gates gates.yml     # exit 1 = blocked
+mlpilot register --model build/model --registry registry/dev --name churn --metrics build/metrics.json
+mlpilot release --config environments.yml --name churn --version 7 --from qa --to prod \
                           --released-by ana --approved-by bob,carol
 ```
 
@@ -1504,7 +1539,7 @@ testing, its drifted columns agreed with ours.
 ## 🧾 25 · Lineage & catalogs
 
 ```python
-from automatedcleaning.lineage import dataset
+from mlpilot.lineage import dataset
 lin = ac.Lineage.from_env()                       # OPENLINEAGE_URL (Marquez, DataHub, Atlan...) and/or a file
 with lin.run("train_churn", inputs=[dataset("warehouse.customers", train_df)],
              outputs=[dataset("models/churn/v7")]):
@@ -1512,11 +1547,11 @@ with lin.run("train_churn", inputs=[dataset("warehouse.customers", train_df)],
 lin.emit_tracked_run(run)                          # existing tracker runs and dataset versions, too
 ac.LineageGraph.from_file("lineage.jsonl").upstream("models/churn/v7")
 
-from automatedcleaning.integrations import aws_glue
+from mlpilot.integrations import aws_glue
 aws_glue.write_table(df, "analytics", "customers", "s3://lake/customers/", partition_by=["country"])
 aws_glue.read_table("analytics", "customers"); aws_glue.run_job("nightly-etl", {"--date": "2026-11-08"})
 
-from automatedcleaning.integrations.azure_data_factory import DataFactory
+from mlpilot.integrations.azure_data_factory import DataFactory
 DataFactory(sub, "data-rg", "corp-adf").run_pipeline("CopyOrders", {"date": "2026-11-08"})
 ```
 
@@ -1537,7 +1572,7 @@ and versions.
 ## ☁️ 26 · Deploy on AWS
 
 ```python
-from automatedcleaning.deploy import aws
+from mlpilot.deploy import aws
 uri = aws.push_image("churn:7", "ml/churn")                    # ECR, scan-on-push, immutable tags
 aws.deploy_sagemaker(uri, "churn-prod", role_arn=ROLE, instance_count=2, autoscale=(2, 8),
                      environment={"AC_API_KEY": "aws-sm://prod/churn#api_key"},
@@ -1575,7 +1610,7 @@ The library is a **hybrid**: a friendly Python API on top, a fast Rust engine un
 
 - 🐍 **Python frontend** — the API you call, plus everything that leans on the Python
   ecosystem (Polars I/O, scikit-learn imputation, Plotly dashboards, Presidio PII, Claude AI).
-- 🦀 **Rust backend** (`automatedcleaning._rustcore`) — the number-crunching and per-row
+- 🦀 **Rust backend** (`mlpilot._rustcore`) — the number-crunching and per-row
   string work: text preprocessing, symbol stripping, IQR outliers, skewness, correlation,
   multicollinearity and JSON detection.
 
@@ -1583,12 +1618,12 @@ You install one wheel and write normal Python — the Rust is invisible.
 
 ```
 ┌─────────────────────────── your code ───────────────────────────┐
-│  import automatedcleaning as ac                                  │
+│  import mlpilot as ac                                  │
 │  df = ac.load_data("data.csv"); ac.clean_data(df)                │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ calls
 ┌──────────────────────────────▼──────────────────────────────────┐
-│  Python frontend  (automatedcleaning/cleaning.py)                │
+│  Python frontend  (mlpilot/cleaning.py)                │
 │    Polars • scikit-learn • Plotly • Presidio • LangChain         │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ delegates hot loops
@@ -1614,7 +1649,7 @@ path, with the GIL released so it scales across cores.
   - validation and parsing: `rapidfuzz`, `phonenumbers`, `email-validator`, `python-dateutil`
   - configs and contracts: `pyyaml`
 - **Optional extras** add everything else; see [Installation](#-installation).
-  `pip install "AutomatedCleaning[all]"` installs them all.
+  `pip install "mlpilot[all]"` installs them all.
 - **Claude-powered features** are optional: AI categorical corrections and insight narratives.
   They use your `ANTHROPIC_API_KEY`, and without it fall back to offline behaviour.
 
@@ -1632,7 +1667,7 @@ src/
   text.rs             # text preprocessing (contractions, regex, stopwords)
   stats.rs            # skewness, IQR, correlation, multicollinearity
   clean.rs            # whitespace, Unicode, mojibake, booleans, placeholders
-automatedcleaning/
+mlpilot/
   core/               # shared Step / Pipeline core (no imports from the rest of the package)
   ingestion/          # files, cloud, SQL, warehouses, APIs, incremental loads
   cleaners.py         # stateful cleaning steps + default_cleaning_pipeline()

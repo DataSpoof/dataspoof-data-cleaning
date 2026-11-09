@@ -1,11 +1,11 @@
-# Prometheus + Grafana for AutomatedCleaning model services, pre-provisioned with the
-# "AutomatedCleaning - model service" dashboard and the alert rules.
+# Prometheus + Grafana for MLPilot model services, pre-provisioned with the
+# "MLPilot - model service" dashboard and the alert rules.
 #
 #   MODEL_TARGET=host.docker.internal:8000 docker compose up -d
 #   open http://localhost:3000  (admin / $GRAFANA_ADMIN_PASSWORD)   and   http://localhost:9090/alerts
 #
-# The model service: `automatedcleaning serve model_dir --port 8000` or the image from
-# `automatedcleaning container`, ideally with AC_MONITOR_PATH set so drift and estimated
+# The model service: `mlpilot serve model_dir --port 8000` or the image from
+# `mlpilot container`, ideally with AC_MONITOR_PATH set so drift and estimated
 # performance are exported too.
 services:
   prometheus:
@@ -35,7 +35,7 @@ services:
       PROMETHEUS_URL: http://prometheus:9090
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/automatedcleaning-model.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/mlpilot-model.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

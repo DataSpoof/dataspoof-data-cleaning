@@ -1,9 +1,9 @@
 # Deployment
 
-::: automatedcleaning.deploy
+::: mlpilot.deploy
     options:
       show_submodules: true
 
 ## AWS
 
-::: automatedcleaning.deploy.aws
+::: mlpilot.deploy.aws

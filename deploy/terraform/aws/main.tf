@@ -1,4 +1,4 @@
-# AutomatedCleaning Hub on AWS: S3 artifacts + RDS PostgreSQL + IRSA, deployed to an existing EKS cluster.
+# MLPilot Hub on AWS: S3 artifacts + RDS PostgreSQL + IRSA, deployed to an existing EKS cluster.
 terraform {
   required_version = ">= 1.5"
   required_providers {
@@ -29,7 +29,7 @@ provider "helm" {
 }
 
 locals {
-  tags = merge({ "app" = "automatedcleaning-hub", "managed-by" = "terraform" }, var.tags)
+  tags = merge({ "app" = "mlpilot-hub", "managed-by" = "terraform" }, var.tags)
 }
 
 # ── artifact bucket: private, encrypted, versioned ────────────────────────────
@@ -89,7 +89,7 @@ resource "aws_db_subnet_group" "hub" {
 
 resource "aws_security_group" "db" {
   name        = "${var.name}-db"
-  description = "PostgreSQL for AutomatedCleaning Hub (from the EKS cluster only)"
+  description = "PostgreSQL for MLPilot Hub (from the EKS cluster only)"
   vpc_id      = var.vpc_id
   ingress {
     description     = "PostgreSQL from EKS nodes"
@@ -175,7 +175,7 @@ resource "helm_release" "hub" {
   name             = var.name
   namespace        = var.namespace
   create_namespace = true
-  chart            = "${path.module}/../../helm/automatedcleaning-hub"
+  chart            = "${path.module}/../../helm/mlpilot-hub"
   values = [yamlencode({
     image          = { repository = var.image_repository, tag = var.image_tag }
     replicas       = var.replicas

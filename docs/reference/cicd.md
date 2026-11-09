@@ -1,3 +1,3 @@
 # CI/CD
 
-::: automatedcleaning.cicd
+::: mlpilot.cicd

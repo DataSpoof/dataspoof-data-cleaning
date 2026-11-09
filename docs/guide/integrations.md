@@ -22,21 +22,21 @@ The built-in tracker, data repository and feature store need no servers. If your
 runs one of these tools, these bridges move the same objects into it:
 
 ```python
-from automatedcleaning.integrations import mlflow as acm
+from mlpilot.integrations import mlflow as acm
 acm.export_tracker(tracker, tracking_uri="http://mlflow:5000")       # every run: params, metric history, artifacts
 info = acm.log_automl(model, test, experiment="churn", register_as="churn")   # a pyfunc model with a signature
 acm.export_registry(registry, "churn")                                # versions; stages become aliases
 model = acm.load_automl("models:/churn@production")                   # back to an AutoML object
 #   $ mlflow models serve -m models:/churn@production --env-manager local
 
-from automatedcleaning.integrations.dvc import DVCRepo, export_repository
+from mlpilot.integrations.dvc import DVCRepo, export_repository
 repo = DVCRepo.init("ml-data")                                        # git init + dvc init
 repo.add_remote("storage", "s3://bucket/dvc")
 repo.track(df, "data/customers.parquet", message="Q2 refresh", tag="customers-v2", push=True)
 old = repo.read("data/customers.parquet", rev="customers-v1")         # any commit, tag or branch
 export_repository(data_repo, "customers", repo)                       # DataRepository history -> git commits + tags
 
-from automatedcleaning.integrations.feast import export_to_feast, feast_features
+from mlpilot.integrations.feast import export_to_feast, feast_features
 fs = export_to_feast(store, "feast_repo")             # feature_store.yaml + features.py, applied and materialized
 fs.get_historical_features(entity_df, feast_features(store, ["customer_stats:*"])).to_df()
 ```

@@ -16,5 +16,5 @@ output "hub_role_arn" {
 }
 
 output "next_step" {
-  value = "kubectl -n ${var.namespace} exec deploy/${var.name} -- automatedcleaning hub create-admin --name admin"
+  value = "kubectl -n ${var.namespace} exec deploy/${var.name} -- mlpilot hub create-admin --name admin"
 }

@@ -1,5 +1,5 @@
 # Pipeline core
 
-::: automatedcleaning.core
+::: mlpilot.core
     options:
       show_submodules: true

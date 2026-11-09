@@ -7,8 +7,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
-from automatedcleaning.splitting import SplitWarning, check_split, cv_folds, split_data
+import mlpilot as ac
+from mlpilot.splitting import SplitWarning, check_split, cv_folds, split_data
 
 
 @pytest.fixture()

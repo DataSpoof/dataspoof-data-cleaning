@@ -18,24 +18,24 @@ Set `AC_API_KEY` to require an `X-API-Key` header, which is checked in constant 
 sizes are capped. Errors return JSON, and internal errors never leak details. With
 `prediction_log="preds.jsonl"`, every request is logged for monitoring.
 
-In production, run `gunicorn automatedcleaning.deploy.wsgi:app` with `AC_MODEL_PATH` set. Use
-waitress on Windows, and install either with `pip install "AutomatedCleaning[serve]"`.
+In production, run `gunicorn mlpilot.deploy.wsgi:app` with `AC_MODEL_PATH` set. Use
+waitress on Windows, and install either with `pip install "mlpilot[serve]"`.
 
 **Docker.** `build_docker` writes a multi-stage Dockerfile: a non-root user, a health check,
 gunicorn, and the model baked in. The generated image has been built and tested end to end.
 
-**ONNX** (`pip install "AutomatedCleaning[onnx]"`) exports the trained estimator: linear models,
+**ONNX** (`pip install "mlpilot[onnx]"`) exports the trained estimator: linear models,
 random forests, extra trees and voting ensembles. Pass `sample=df` and the export is checked
 against the original model. HistGradientBoosting can't be exported yet because of an upstream
 skl2onnx limitation; the error says so.
 
-**The CLI** (also available as `python -m automatedcleaning.deploy`):
+**The CLI** (also available as `python -m mlpilot.deploy`):
 
 ```bash
-automatedcleaning serve  --model models/titanic --port 8000
-automatedcleaning score  --model models/titanic --input big.csv --output scored.parquet
-automatedcleaning --registry ac_registry docker --model titanic:production --out build/
-automatedcleaning --registry ac_registry monitor --model titanic --monitor monitor.json --input today.csv
+mlpilot serve  --model models/titanic --port 8000
+mlpilot score  --model models/titanic --input big.csv --output scored.parquet
+mlpilot --registry ac_registry docker --model titanic:production --out build/
+mlpilot --registry ac_registry monitor --model titanic --monitor monitor.json --input today.csv
 ```
 ---
 
@@ -55,9 +55,9 @@ ac.build_docker(model, "build/", target="sagemaker")                       # or 
 - **Observability:** Prometheus metrics at `/metrics`, and optional OpenTelemetry tracing.
 - **Cloud routes:** SageMaker (`/ping`, `/invocations`), Vertex AI (`instances` payloads,
   `$AIP_*` routes) and Azure ML (`/score`). There's also an ASGI app for uvicorn
-  (`automatedcleaning.deploy.asgi:app`).
+  (`mlpilot.deploy.asgi:app`).
 - **Speed:** a single-row prediction takes about 50 ms, down from about 500 ms in 1.x.
-- **Signed models** (`automatedcleaning.security`):
+- **Signed models** (`mlpilot.security`):
   - `sign_model(path, private_key)` signs a saved model with Ed25519.
   - Set `AC_MODEL_PUBLIC_KEY` and every load (the API, batch scoring, the registry) refuses
     models that are unsigned or tampered with. The check runs before anything is unpickled.

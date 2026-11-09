@@ -1,5 +1,5 @@
 # Tracking & registry
 
-::: automatedcleaning.registry
+::: mlpilot.registry
     options:
       show_submodules: true

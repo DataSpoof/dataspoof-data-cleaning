@@ -1,4 +1,4 @@
-# A model served by an AutomatedCleaning container (`automatedcleaning docker --target sagemaker`)
+# A model served by an MLPilot container (`mlpilot docker --target sagemaker`)
 # as an Amazon SageMaker endpoint: IAM role, model, endpoint config, endpoint with blue/green
 # deployment + automatic rollback on alarms, autoscaling, data capture and CloudWatch alarms.
 #
@@ -14,7 +14,7 @@ terraform {
 
 locals {
   serverless = var.serverless_memory_mb != null
-  tags       = merge({ "managed-by" = "automatedcleaning", "model" = var.name }, var.tags)
+  tags       = merge({ "managed-by" = "mlpilot", "model" = var.name }, var.tags)
   environment = merge(
     { AC_MODEL_NAME = var.name, AC_MODEL_VERSION = var.model_version },
     var.api_key_secret_id == null ? {} : { AC_API_KEY = "aws-sm://${var.api_key_secret_id}" },

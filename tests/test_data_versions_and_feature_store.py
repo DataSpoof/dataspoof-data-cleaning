@@ -5,8 +5,8 @@ import datetime as dt
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
-from automatedcleaning import DataRepository, Entity, FeatureStore, FeatureView
+import mlpilot as ac
+from mlpilot import DataRepository, Entity, FeatureStore, FeatureView
 
 
 # ── data version control ────────────────────────────────────────────────────

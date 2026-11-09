@@ -1,9 +1,9 @@
 # Monitoring
 
-::: automatedcleaning.monitoring
+::: mlpilot.monitoring
     options:
       show_submodules: true
 
 ## Performance without labels
 
-::: automatedcleaning.monitoring.estimate
+::: mlpilot.monitoring.estimate

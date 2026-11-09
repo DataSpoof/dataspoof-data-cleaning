@@ -5,8 +5,8 @@ import polars as pl
 import pytest
 from scipy.io import wavfile
 
-import automatedcleaning as ac
-from automatedcleaning.media import (AudioPreprocessor, ImagePreprocessor, audio_features, audio_quality_report, augment,
+import mlpilot as ac
+from mlpilot.media import (AudioPreprocessor, ImagePreprocessor, audio_features, audio_quality_report, augment,
                                      image_features, image_quality_report, load_audio, scan_audio, scan_images)
 
 try:

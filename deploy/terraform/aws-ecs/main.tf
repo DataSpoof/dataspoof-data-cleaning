@@ -1,4 +1,4 @@
-# A model API (the AutomatedCleaning container, port 8000) on ECS Fargate behind an
+# A model API (the MLPilot container, port 8000) on ECS Fargate behind an
 # Application Load Balancer: private tasks, the API key injected from Secrets Manager,
 # rolling deploys with a circuit breaker that rolls back automatically, CPU + request-count
 # autoscaling, logs and alarms.
@@ -14,7 +14,7 @@ terraform {
 }
 
 locals {
-  tags  = merge({ "managed-by" = "automatedcleaning", "model" = var.name }, var.tags)
+  tags  = merge({ "managed-by" = "mlpilot", "model" = var.name }, var.tags)
   https = var.certificate_arn != null
   environment = merge({ AC_MODEL_NAME = var.name, AC_MODEL_VERSION = var.model_version, AC_LOG_LEVEL = "INFO" },
   var.environment)
@@ -23,7 +23,7 @@ locals {
 data "aws_region" "current" {}
 
 resource "aws_cloudwatch_log_group" "this" {
-  name              = "/automatedcleaning/${var.name}"
+  name              = "/mlpilot/${var.name}"
   retention_in_days = var.log_retention_days
   kms_key_id        = var.kms_key_arn
   tags              = local.tags

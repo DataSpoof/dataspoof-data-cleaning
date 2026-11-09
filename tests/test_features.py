@@ -11,7 +11,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
+import mlpilot as ac
 
 ROOT = Path(__file__).resolve().parent.parent
 

@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 from scipy import stats as st
 
-from automatedcleaning import stats
+from mlpilot import stats
 
 
 @pytest.fixture(scope="module")

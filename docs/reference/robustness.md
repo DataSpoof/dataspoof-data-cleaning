@@ -1,3 +1,3 @@
 # Robustness
 
-::: automatedcleaning.robustness
+::: mlpilot.robustness

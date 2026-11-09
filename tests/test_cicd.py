@@ -7,7 +7,7 @@ import polars as pl
 import pytest
 import yaml
 
-from automatedcleaning.deploy.cli import main
+from mlpilot.deploy.cli import main
 
 
 @pytest.fixture()

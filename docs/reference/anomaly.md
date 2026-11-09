@@ -1,5 +1,5 @@
 # Anomaly detection
 
-::: automatedcleaning.anomaly
+::: mlpilot.anomaly
     options:
       show_submodules: true

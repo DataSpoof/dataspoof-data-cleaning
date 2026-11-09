@@ -1,3 +1,3 @@
 # Poisoning detection
 
-::: automatedcleaning.poisoning
+::: mlpilot.poisoning

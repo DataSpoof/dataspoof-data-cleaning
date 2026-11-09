@@ -5,7 +5,7 @@ The library is a **hybrid**: a friendly Python API on top, a fast Rust engine un
 
 - 🐍 **Python frontend** — the API you call, plus everything that leans on the Python
   ecosystem (Polars I/O, scikit-learn imputation, Plotly dashboards, Presidio PII, Claude AI).
-- 🦀 **Rust backend** (`automatedcleaning._rustcore`) — the number-crunching and per-row
+- 🦀 **Rust backend** (`mlpilot._rustcore`) — the number-crunching and per-row
   string work: text preprocessing, symbol stripping, IQR outliers, skewness, correlation,
   multicollinearity and JSON detection.
 
@@ -13,12 +13,12 @@ You install one wheel and write normal Python — the Rust is invisible.
 
 ```
 ┌─────────────────────────── your code ───────────────────────────┐
-│  import automatedcleaning as ac                                  │
+│  import mlpilot as ac                                  │
 │  df = ac.load_data("data.csv"); ac.clean_data(df)                │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ calls
 ┌──────────────────────────────▼──────────────────────────────────┐
-│  Python frontend  (automatedcleaning/cleaning.py)                │
+│  Python frontend  (mlpilot/cleaning.py)                │
 │    Polars • scikit-learn • Plotly • Presidio • LangChain         │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ delegates hot loops

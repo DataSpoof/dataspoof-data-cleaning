@@ -12,9 +12,9 @@ import polars as pl
 import pytest
 from sklearn.datasets import make_classification, make_regression
 
-import automatedcleaning as ac
-from automatedcleaning.causal import UpliftModel, estimate_effect, qini
-from automatedcleaning.integrations import tasks
+import mlpilot as ac
+from mlpilot.causal import UpliftModel, estimate_effect, qini
+from mlpilot.integrations import tasks
 
 FAST = dict(time_budget=30, cv=3, verbose=False, max_trials=3)
 
@@ -204,8 +204,8 @@ def test_airflow_operators_with_stub(monkeypatch, churn_files, tmp_path):
         def __init__(self, task_id=None, **kw):
             self.task_id = task_id
     _fake_module(monkeypatch, "airflow.models", BaseOperator=BaseOperator)
-    monkeypatch.delitem(sys.modules, "automatedcleaning.integrations.airflow", raising=False)
-    af = importlib.import_module("automatedcleaning.integrations.airflow")
+    monkeypatch.delitem(sys.modules, "mlpilot.integrations.airflow", raising=False)
+    af = importlib.import_module("mlpilot.integrations.airflow")
     op = af.AutoMLTrainOperator(task_id="train", source=str(churn_files / "train.parquet"), target="churned",
                                 registry=str(tmp_path / "reg"), name="c", promote_to="production",
                                 automl_kwargs={"time_budget": 20, "max_trials": 1, "include": ["logistic_regression"]})
@@ -227,9 +227,9 @@ def test_prefect_and_dagster_with_stubs(monkeypatch):
         calls.append(("flow", kw.get("name")))
         return lambda fn: fn
     _fake_module(monkeypatch, "prefect", task=task, flow=flow)
-    monkeypatch.delitem(sys.modules, "automatedcleaning.integrations.prefect", raising=False)
-    pf = importlib.import_module("automatedcleaning.integrations.prefect")
-    assert pf.train_task is tasks.train_and_register and ("flow", "automatedcleaning-ml-lifecycle") in calls
+    monkeypatch.delitem(sys.modules, "mlpilot.integrations.prefect", raising=False)
+    pf = importlib.import_module("mlpilot.integrations.prefect")
+    assert pf.train_task is tasks.train_and_register and ("flow", "mlpilot-ml-lifecycle") in calls
 
     def asset(**kw):
         def wrap(fn):
@@ -237,8 +237,8 @@ def test_prefect_and_dagster_with_stubs(monkeypatch):
             return fn
         return wrap
     _fake_module(monkeypatch, "dagster", asset=asset, Output=lambda value, metadata=None: (value, metadata))
-    monkeypatch.delitem(sys.modules, "automatedcleaning.integrations.dagster", raising=False)
-    dg = importlib.import_module("automatedcleaning.integrations.dagster")
+    monkeypatch.delitem(sys.modules, "mlpilot.integrations.dagster", raising=False)
+    dg = importlib.import_module("mlpilot.integrations.dagster")
     assets = dg.ml_assets(source="x", target="y", registry="r", name="churn", score_source="a", score_output="b")
     assert [a.asset_kw["name"] for a in assets] == ["churn_trained_model", "churn_scored_batch"]
 
@@ -248,24 +248,24 @@ def test_tool_bridges_explain_how_to_install(monkeypatch, module, extra):
     """Real behaviour is tested against the real tools in test_real_integrations.py; without the
     tool installed, importing the bridge must say which extra to install."""
     monkeypatch.setitem(sys.modules, module, None)            # simulate "not installed"
-    monkeypatch.delitem(sys.modules, f"automatedcleaning.integrations.{module}", raising=False)
-    with pytest.raises(ImportError, match=rf"AutomatedCleaning\[{extra}\]"):
-        importlib.import_module(f"automatedcleaning.integrations.{module}")
-    monkeypatch.delitem(sys.modules, f"automatedcleaning.integrations.{module}", raising=False)
+    monkeypatch.delitem(sys.modules, f"mlpilot.integrations.{module}", raising=False)
+    with pytest.raises(ImportError, match=rf"mlpilot\[{extra}\]"):
+        importlib.import_module(f"mlpilot.integrations.{module}")
+    monkeypatch.delitem(sys.modules, f"mlpilot.integrations.{module}", raising=False)
 
 
 def test_dvc_bridge_explains_how_to_install(monkeypatch, tmp_path):
-    from automatedcleaning.integrations import dvc as acd
+    from mlpilot.integrations import dvc as acd
     monkeypatch.setattr(acd.importlib.util, "find_spec", lambda name: None)
     monkeypatch.setattr(acd.shutil, "which", lambda name: None)
-    with pytest.raises(ImportError, match=r"AutomatedCleaning\[dvc\]"):
+    with pytest.raises(ImportError, match=r"mlpilot\[dvc\]"):
         acd.DVCRepo.init(tmp_path / "repo", git=False)
     with pytest.raises(acd.DVCError, match="not a DVC repository"):
         acd.DVCRepo(tmp_path)
 
 
 def test_kafka_stream_scoring_at_least_once(churn_files):
-    from automatedcleaning.integrations.kafka import KafkaSource, score_stream
+    from mlpilot.integrations.kafka import KafkaSource, score_stream
     X, y = make_classification(300, 4, n_informative=3, n_redundant=0, random_state=0)
     df = pl.DataFrame(X, schema=list("abcd")).with_columns(pl.Series("churned", y))
     model = ac.AutoML("churned", include=["logistic_regression"], **{**FAST, "max_trials": 1}).fit(df)

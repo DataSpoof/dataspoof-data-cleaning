@@ -6,9 +6,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
-from automatedcleaning.quality import semantic_type
-from automatedcleaning.quality.checks import _case_variant_cells
+import mlpilot as ac
+from mlpilot.quality import semantic_type
+from mlpilot.quality.checks import _case_variant_cells
 
 N = 120
 

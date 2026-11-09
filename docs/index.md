@@ -1,8 +1,12 @@
-# AutomatedCleaning
+# MLPilot
+
+!!! note "AutomatedCleaning is now MLPilot"
+    Install `mlpilot` and `import mlpilot`. Existing code and saved models keep working: see [Moving from AutomatedCleaning](installation.md#moving-from-automatedcleaning).
+
 
 **From raw data to a monitored production model: automated, explainable, auditable.**
 
-AutomatedCleaning automates the whole data-science lifecycle in one Python library. It covers
+MLPilot automates the whole data-science lifecycle in one Python library. It covers
 ingestion and cleaning, data quality, feature engineering, AutoML, explainability and fairness,
 the model registry, deployment, monitoring, and plain-English insights. A **Rust engine**
 handles the heavy computation, and every stage shares one `fit` / `transform` / `save` contract.
@@ -11,11 +15,11 @@ handles the heavy computation, and every stage shares one `fit` / `transform` / 
 
 
 ```bash
-pip install AutomatedCleaning
+pip install mlpilot
 ```
 
 ```python
-import automatedcleaning as ac
+import mlpilot as ac
 
 df = ac.read("titanic.csv")                                       # 1. ingest
 train, test = df.head(700), df.tail(191)
@@ -42,7 +46,7 @@ What that gives you:
 Prefer to clean interactively? `ac.clean_data(ac.load_data("data.csv"))` walks you through it
 and builds an EDA dashboard.
 
-![AutomatedCleaning workflow](assets/workflow.svg)
+![MLPilot workflow](assets/workflow.svg)
 
 See [Workflow](workflow.md) for how to read it.
 

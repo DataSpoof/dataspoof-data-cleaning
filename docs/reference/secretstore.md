@@ -1,3 +1,3 @@
 # Secrets
 
-::: automatedcleaning.secretstore
+::: mlpilot.secretstore

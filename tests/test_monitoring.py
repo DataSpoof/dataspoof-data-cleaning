@@ -7,8 +7,8 @@ import polars as pl
 import pytest
 from sklearn.datasets import make_classification, make_regression
 
-import automatedcleaning as ac
-from automatedcleaning.monitoring import Monitor, psi
+import mlpilot as ac
+from mlpilot.monitoring import Monitor, psi
 
 FAST = dict(time_budget=30, cv=3, verbose=False, max_trials=2, include=["logistic_regression", "ridge",
                                                                          "random_forest"])
@@ -46,7 +46,7 @@ def test_drift_report_detects_shift_and_schema_changes():
 
 
 def test_baseline_is_json_and_has_no_raw_rows(tmp_path):
-    from automatedcleaning.monitoring import Baseline
+    from mlpilot.monitoring import Baseline
     secret = pl.DataFrame({"email": [f"user{i}@corp.com" for i in range(300)], "x": np.arange(300.0)})
     b = Baseline.fit(secret)
     text = json.dumps(b.to_dict())
@@ -103,7 +103,7 @@ def test_regression_monitor_uses_error_increase():
 
 
 def test_webhook_alert_failure_never_raises():
-    from automatedcleaning.monitoring import webhook_alert
+    from mlpilot.monitoring import webhook_alert
     send = webhook_alert("http://127.0.0.1:9/hook", timeout=0.5)
     rep = ac.monitoring.MonitorReport("t", 1, ac.drift_report(_frame(50, 0), _frame(50, 1)), None, None, [], False)
     with pytest.warns(RuntimeWarning, match="webhook failed"):

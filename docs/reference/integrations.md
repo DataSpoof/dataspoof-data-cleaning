@@ -1,29 +1,29 @@
 # Integrations
 
-::: automatedcleaning.integrations
+::: mlpilot.integrations
     options:
       show_submodules: true
 
 ## MLflow
 
-::: automatedcleaning.integrations.mlflow
+::: mlpilot.integrations.mlflow
 
 ## DVC
 
-::: automatedcleaning.integrations.dvc
+::: mlpilot.integrations.dvc
 
 ## Feast
 
-::: automatedcleaning.integrations.feast
+::: mlpilot.integrations.feast
 
 ## Evidently
 
-::: automatedcleaning.integrations.evidently
+::: mlpilot.integrations.evidently
 
 ## AWS Glue
 
-::: automatedcleaning.integrations.aws_glue
+::: mlpilot.integrations.aws_glue
 
 ## Azure Data Factory
 
-::: automatedcleaning.integrations.azure_data_factory
+::: mlpilot.integrations.azure_data_factory

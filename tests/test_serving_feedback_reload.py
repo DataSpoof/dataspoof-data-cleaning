@@ -10,8 +10,8 @@ import polars as pl
 import pytest
 from sklearn.datasets import make_classification
 
-import automatedcleaning as ac
-from automatedcleaning.monitoring import join_feedback
+import mlpilot as ac
+from mlpilot.monitoring import join_feedback
 
 FAST = dict(time_budget=30, cv=3, verbose=False, max_trials=1, include=["logistic_regression"])
 

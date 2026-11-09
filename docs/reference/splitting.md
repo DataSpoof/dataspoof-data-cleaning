@@ -1,3 +1,3 @@
 # Data splitting
 
-::: automatedcleaning.splitting
+::: mlpilot.splitting

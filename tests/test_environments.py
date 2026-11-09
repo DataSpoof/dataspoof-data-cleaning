@@ -4,8 +4,8 @@ import polars as pl
 import pytest
 from sklearn.datasets import make_classification
 
-import automatedcleaning as ac
-from automatedcleaning.environments import Environments, ReleaseError
+import mlpilot as ac
+from mlpilot.environments import Environments, ReleaseError
 
 pytest.importorskip("cryptography")
 
@@ -19,7 +19,7 @@ def model():
 
 @pytest.fixture()
 def setup(tmp_path, model, monkeypatch):
-    from automatedcleaning.security import generate_keypair
+    from mlpilot.security import generate_keypair
     priv, pub = generate_keypair(tmp_path / "sign.key", tmp_path / "sign.pub")
     monkeypatch.setenv("PROD_SIGNING_PUB", str(pub))
     cfg = tmp_path / "environments.yml"

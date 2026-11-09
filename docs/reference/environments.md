@@ -1,3 +1,3 @@
 # Environments
 
-::: automatedcleaning.environments
+::: mlpilot.environments

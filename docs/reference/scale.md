@@ -1,5 +1,5 @@
 # Scale
 
-::: automatedcleaning.scale
+::: mlpilot.scale
     options:
       show_submodules: true

@@ -8,8 +8,8 @@ import polars as pl
 import pytest
 from sklearn.datasets import make_classification
 
-import automatedcleaning as ac
-from automatedcleaning.registry import dataset_fingerprint
+import mlpilot as ac
+from mlpilot.registry import dataset_fingerprint
 
 FAST = dict(time_budget=30, cv=3, verbose=False, max_trials=2, include=["logistic_regression", "random_forest"])
 

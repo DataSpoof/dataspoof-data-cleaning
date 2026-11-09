@@ -8,7 +8,7 @@ variable "name" {
 }
 
 variable "image_uri" {
-  description = "ECR image built with `automatedcleaning docker --target sagemaker` (aws.push_image)."
+  description = "ECR image built with `mlpilot docker --target sagemaker` (aws.push_image)."
   type        = string
 }
 

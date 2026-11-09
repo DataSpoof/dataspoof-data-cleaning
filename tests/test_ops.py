@@ -14,10 +14,10 @@ import polars as pl
 import pytest
 from sklearn.datasets import make_classification
 
-import automatedcleaning as ac
-from automatedcleaning.deploy.cli import container_command
-from automatedcleaning.ingestion import SQLSource
-from automatedcleaning.monitoring import Monitor, join_labels, opsgenie_alert, pagerduty_alert, sql_sink
+import mlpilot as ac
+from mlpilot.deploy.cli import container_command
+from mlpilot.ingestion import SQLSource
+from mlpilot.monitoring import Monitor, join_labels, opsgenie_alert, pagerduty_alert, sql_sink
 
 FAST = dict(time_budget=30, cv=3, verbose=False, max_trials=2, include=["logistic_regression", "random_forest"])
 
@@ -157,7 +157,7 @@ def test_container_command_and_docker_targets(tmp_path, model, monkeypatch):
 
 def test_signed_models(tmp_path, model, monkeypatch, data):
     pytest.importorskip("cryptography")
-    from automatedcleaning.security import SignatureError, generate_keypair, sign_model, verify_model
+    from mlpilot.security import SignatureError, generate_keypair, sign_model, verify_model
     priv, pub = generate_keypair(tmp_path / "k.pem", tmp_path / "k.pub")
     other_priv, other_pub = generate_keypair(tmp_path / "o.pem", tmp_path / "o.pub", password="pw")
     path = model.save(tmp_path / "m")
@@ -180,7 +180,7 @@ def test_signed_models(tmp_path, model, monkeypatch, data):
 
 def test_skops_export(tmp_path, data, model):
     pytest.importorskip("skops")
-    from automatedcleaning.deploy import load_skops
+    from mlpilot.deploy import load_skops
     out = ac.export_model(model, tmp_path / "sk", format="skops")
     assert (out / "model.skops").exists() and not (out / "model.joblib").exists()
     loaded = load_skops(out)                                    # sklearn types are trusted by default
@@ -221,7 +221,7 @@ def test_incident_alerts(capture, data, model):
     mon.on_alert(pagerduty_alert("rk-123", url=url + "/v2/enqueue"))
     mon.on_alert(opsgenie_alert("og-key"))           # real endpoint unreachable here -> warning only
     shifted = test.with_columns((pl.col("a") * 5 + 3).alias("a"), (pl.col("b") - 4).alias("b"), (1 - pl.col("y")).alias("y"))
-    with pytest.warns(ac.AutomatedCleaningWarning):
+    with pytest.warns(ac.MLPilotWarning):
         report = mon.check(shifted)
     assert report.retrain_recommended and report.name == "churn"
     pd_events = [b for p, h, b in got if p == "/v2/enqueue"]

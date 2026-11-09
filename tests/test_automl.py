@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 from sklearn.datasets import make_blobs, make_classification, make_regression
 
-import automatedcleaning as ac
+import mlpilot as ac
 
 ROOT = Path(__file__).resolve().parent.parent
 FAST = dict(time_budget=60, cv=3, verbose=False, max_trials=5,
@@ -41,7 +41,7 @@ def test_detect_clustering_and_time_series():
 
 
 def test_optional_boosters_are_used_only_when_installed(monkeypatch):
-    from automatedcleaning.automl import models
+    from mlpilot.automl import models
     monkeypatch.setattr(models, "_has", lambda name: False)
     names = ac.available_models("binary")
     assert "lightgbm" not in names and "xgboost" not in names

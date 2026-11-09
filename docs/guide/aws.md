@@ -2,7 +2,7 @@
 
 
 ```python
-from automatedcleaning.deploy import aws
+from mlpilot.deploy import aws
 uri = aws.push_image("churn:7", "ml/churn")                    # ECR, scan-on-push, immutable tags
 aws.deploy_sagemaker(uri, "churn-prod", role_arn=ROLE, instance_count=2, autoscale=(2, 8),
                      environment={"AC_API_KEY": "aws-sm://prod/churn#api_key"},

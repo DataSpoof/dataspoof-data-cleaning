@@ -1,4 +1,4 @@
-"""AutomatedCleaning Hub: RBAC, SSO (OIDC), tokens, runs, model registry, approvals, policy gates,
+"""MLPilot Hub: RBAC, SSO (OIDC), tokens, runs, model registry, approvals, policy gates,
 audit log integrity, monitoring, the UI and the Python client against a live server."""
 
 import base64
@@ -19,9 +19,9 @@ pytest.importorskip("fastapi")
 pytest.importorskip("jwt")
 from fastapi.testclient import TestClient  # noqa: E402
 
-import automatedcleaning as ac  # noqa: E402
-from automatedcleaning.hub.app import bootstrap_admin, create_app  # noqa: E402
-from automatedcleaning.hub.storage import tar_directory  # noqa: E402
+import mlpilot as ac  # noqa: E402
+from mlpilot.hub.app import bootstrap_admin, create_app  # noqa: E402
+from mlpilot.hub.storage import tar_directory  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -80,7 +80,7 @@ def test_auth_rbac_and_tokens(hub):
     assert client.get("/api/me", headers=H(new)).status_code == 401
     r = client.get("/health")
     assert r.status_code == 200 and r.headers["X-Frame-Options"] == "DENY" and "script-src 'self'" in r.headers["Content-Security-Policy"]
-    assert "AutomatedCleaning Hub" in client.get("/").text and "esc(" in client.get("/ui.js").text
+    assert "MLPilot Hub" in client.get("/").text and "esc(" in client.get("/ui.js").text
 
 
 def test_runs(hub):
@@ -191,7 +191,7 @@ def idp():
 def test_oidc_login_provisions_users_and_maps_groups(tmp_path, idp):
     import jwt
 
-    from automatedcleaning.hub.security import OIDCVerifier
+    from mlpilot.hub.security import OIDCVerifier
     key, jwks_url = idp
     url = f"sqlite:///{tmp_path / 'hub.db'}"
     admin = bootstrap_admin(url)
@@ -224,7 +224,7 @@ def test_oidc_login_provisions_users_and_maps_groups(tmp_path, idp):
 def test_hub_client_end_to_end(tmp_path, model_and_data):
     import uvicorn
 
-    from automatedcleaning.hub import HubClient, HubError
+    from mlpilot.hub import HubClient, HubError
     model, df = model_and_data
     url = f"sqlite:///{tmp_path / 'hub.db'}"
     admin = bootstrap_admin(url)

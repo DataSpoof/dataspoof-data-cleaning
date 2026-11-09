@@ -1,5 +1,5 @@
 # Insights & reporting
 
-::: automatedcleaning.insights
+::: mlpilot.insights
     options:
       show_submodules: true

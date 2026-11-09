@@ -1,6 +1,6 @@
 # Workflow
 
-![AutomatedCleaning workflow: data in, build and validate, release, operate](assets/workflow.svg)
+![MLPilot workflow: data in, build and validate, release, operate](assets/workflow.svg)
 
 Read lane 1 left to right, lane 2 right to left, and so on: the flow snakes down the page.
 

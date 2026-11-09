@@ -7,8 +7,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
-from automatedcleaning.core import FORMAT
+import mlpilot as ac
+from mlpilot.core import FORMAT
 
 
 @pytest.fixture
@@ -213,7 +213,7 @@ def test_step_output_is_captured_in_report_not_printed(capsys):
 
 def test_core_does_not_import_the_rest_of_the_package():
     """The core must stay extractable into its own package for future modules."""
-    forbidden = re.compile(r"^\s*(from\s+\.\.|from\s+automatedcleaning|import\s+automatedcleaning)",
+    forbidden = re.compile(r"^\s*(from\s+\.\.|from\s+mlpilot|import\s+mlpilot)",
                            re.MULTILINE)
     core_dir = Path(ac.__file__).parent / "core"
     for src in core_dir.glob("*.py"):

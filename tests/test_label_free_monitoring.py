@@ -8,8 +8,8 @@ import polars as pl
 import pytest
 from sklearn.metrics import roc_auc_score
 
-import automatedcleaning as ac
-from automatedcleaning.monitoring import PerformanceEstimator, domain_classifier_drift
+import mlpilot as ac
+from mlpilot.monitoring import PerformanceEstimator, domain_classifier_drift
 
 FAST = dict(time_budget=30, cv=3, verbose=False, max_trials=1)
 
@@ -88,7 +88,7 @@ def test_domain_classifier_drift():
 
 @pytest.mark.skipif(importlib.util.find_spec("evidently") is None, reason="needs evidently")
 def test_evidently_report_agrees_with_ours(clf, tmp_path):
-    from automatedcleaning.integrations.evidently import evidently_report
+    from mlpilot.integrations.evidently import evidently_report
     model, ref, rng = clf
     cur = _clf_data(2000, rng).with_columns(pl.col("x1") + 1.5)
     res = evidently_report(ref, cur, model=model, html=tmp_path / "drift.html")

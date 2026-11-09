@@ -9,9 +9,9 @@ import pytest
 from sklearn.datasets import make_classification, make_regression
 from sklearn.linear_model import LinearRegression, LogisticRegression
 
-import automatedcleaning as ac
-from automatedcleaning.evaluation import cramers_v, shapley_values
-from automatedcleaning.evaluation._slicing import bh_adjust, segments
+import mlpilot as ac
+from mlpilot.evaluation import cramers_v, shapley_values
+from mlpilot.evaluation._slicing import bh_adjust, segments
 
 ROOT = Path(__file__).resolve().parent.parent
 FAST = dict(time_budget=60, cv=3, verbose=False, max_trials=3,

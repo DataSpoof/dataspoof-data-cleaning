@@ -1,6 +1,6 @@
 # Hub + PostgreSQL for a single host / evaluation.  From the repository root:
 #   docker compose -f deploy/hub/docker-compose.yml up -d --build
-#   docker compose -f deploy/hub/docker-compose.yml exec hub automatedcleaning hub create-admin --name admin
+#   docker compose -f deploy/hub/docker-compose.yml exec hub mlpilot hub create-admin --name admin
 # Put it behind TLS (a reverse proxy / load balancer) before exposing it beyond localhost.
 services:
   postgres:
@@ -16,7 +16,7 @@ services:
       retries: 20
   hub:
     build: {context: ../.., dockerfile: deploy/hub/Dockerfile}
-    image: automatedcleaning-hub:local
+    image: mlpilot-hub:local
     depends_on:
       postgres: {condition: service_healthy}
     environment:
@@ -24,7 +24,7 @@ services:
       AC_HUB_ARTIFACTS: /data/artifacts
       # Single sign-on (optional):
       # AC_OIDC_ISSUER: https://login.microsoftonline.com/<tenant>/v2.0
-      # AC_OIDC_AUDIENCE: api://automatedcleaning-hub
+      # AC_OIDC_AUDIENCE: api://mlpilot-hub
       # AC_HUB_GROUP_ROLES: '{"ml-admins": ["*", "admin"], "churn-team": ["churn", "data_scientist"]}'
     ports: ["127.0.0.1:${HUB_PORT:-8080}:8080"]
     volumes: [artifacts:/data]

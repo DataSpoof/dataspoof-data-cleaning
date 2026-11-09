@@ -1,5 +1,5 @@
 # Evaluation & explainability
 
-::: automatedcleaning.evaluation
+::: mlpilot.evaluation
     options:
       show_submodules: true

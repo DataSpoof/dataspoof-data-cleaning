@@ -14,9 +14,9 @@ import numpy as np
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
-from automatedcleaning.ingestion import APIError, IncrementalLoader, RESTSource, SQLSource, read_file
-from automatedcleaning.ingestion._util import build_select, quote_ident, redact, translate_params
+import mlpilot as ac
+from mlpilot.ingestion import APIError, IncrementalLoader, RESTSource, SQLSource, read_file
+from mlpilot.ingestion._util import build_select, quote_ident, redact, translate_params
 
 SAMPLE = pl.DataFrame({"id": [1, 2, 3], "city": ["Pune", "Delhi", None], "amount": [1.5, 2.0, 3.25]})
 
@@ -307,7 +307,7 @@ def test_infer_types_is_reusable():
 
 
 def test_ingest_contract_quality_and_lineage(tmp_path):
-    from automatedcleaning.quality import Contract, ContractViolation
+    from mlpilot.quality import Contract, ContractViolation
     src = tmp_path / "s.csv"
     pl.DataFrame({"id": [1, 2, 3], "amount": ["10", "20", "x30"]}).write_csv(src)
     res = ac.ingest(src, name="sales", quality=True)
@@ -316,7 +316,7 @@ def test_ingest_contract_quality_and_lineage(tmp_path):
                                                                  "amount": {"type": "number"}}})
     with pytest.raises(ContractViolation):
         ac.ingest(src, contract=contract)
-    with pytest.warns(ac.AutomatedCleaningWarning, match="contract"):
+    with pytest.warns(ac.MLPilotWarning, match="contract"):
         assert not ac.ingest(src, contract=contract, on_violation="warn").passed
     tr = ac.Tracker(tmp_path / "runs")
     with tr.start_run() as run:

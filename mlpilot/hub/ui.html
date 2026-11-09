@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MLPilot Hub</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--text:#1b2230;--muted:#5f6878;--line:#e2e5ea;--accent:#2f5fd0;--accent-soft:rgba(47,95,208,.1);
+--ok:#1a7f45;--warn:#a15c00;--bad:#b42318;--chip:#eef1f6}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1117;--panel:#161b24;--text:#e5e9f0;--muted:#98a2b3;--line:#283040;
+--accent:#7aa2ff;--accent-soft:rgba(122,162,255,.14);--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--chip:#1f2633}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:650}header .sp{flex:1}
+select,input,button,textarea{font:inherit;color:inherit}
+select,input,textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:550}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}button.danger{background:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+nav{display:flex;gap:4px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{background:none;color:var(--muted);border-radius:0;border-bottom:2px solid transparent;padding:10px 12px}
+nav button.on{color:var(--text);border-bottom-color:var(--accent)}
+main{max-width:1200px;margin:0 auto;padding:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 10px}.muted{color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12.5px}
+.tbl{overflow-x:auto}
+.chip{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--chip);font-size:12px;font-weight:600}
+.chip.production{background:rgba(26,127,69,.15);color:var(--ok)}.chip.staging{background:var(--accent-soft);color:var(--accent)}
+.chip.archived{color:var(--muted)}.chip.pending{background:rgba(161,92,0,.15);color:var(--warn)}
+.chip.bad{background:rgba(180,35,24,.14);color:var(--bad)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#login{max-width:520px;margin:60px auto}
+#msg{position:fixed;bottom:16px;right:16px;max-width:420px;padding:10px 14px;border-radius:10px;background:var(--panel);
+border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.15);display:none}
+#msg.err{border-color:var(--bad)}
+code{background:var(--chip);padding:1px 5px;border-radius:4px;font-size:12.5px}
+@media (max-width:640px){main{padding:12px}header{padding:10px 12px}}
+</style>
+</head>
+<body>
+<div id="login" class="card" hidden>
+  <h2>Sign in to MLPilot Hub</h2>
+  <p class="muted">Paste an API token (create one with <code>mlpilot hub create-admin</code> or
+  <code>POST /api/tokens</code>). With single sign-on behind a proxy, the proxy supplies your identity token.</p>
+  <div class="row"><input id="token" type="password" placeholder="ach_…" style="flex:1" autocomplete="off">
+  <button id="signin">Sign in</button></div>
+</div>
+<div id="app" hidden>
+  <header>
+    <h1>MLPilot Hub</h1>
+    <select id="ws" aria-label="Workspace"></select>
+    <span class="sp"></span>
+    <span id="who" class="muted"></span>
+    <button class="ghost" id="signout">Sign out</button>
+  </header>
+  <nav id="tabs">
+    <button data-tab="models" class="on">Models</button>
+    <button data-tab="approvals">Approvals</button>
+    <button data-tab="runs">Runs</button>
+    <button data-tab="monitoring">Monitoring</button>
+    <button data-tab="members">Members</button>
+    <button data-tab="audit">Audit log</button>
+  </nav>
+  <main id="view"></main>
+</div>
+<div id="msg" role="status"></div>
+<script src="/ui.js"></script>
+</body>
+</html>

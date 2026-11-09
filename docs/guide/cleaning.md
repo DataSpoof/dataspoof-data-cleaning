@@ -4,7 +4,7 @@
 ### Interactive cleaning
 
 ```python
-import automatedcleaning as ac
+import mlpilot as ac
 
 # Load any CSV / TSV / JSON / Parquet file (via Polars)
 df = ac.load_data("dataset.csv")
@@ -25,7 +25,7 @@ no questions, learns its cleaning rules on training data, and replays exactly th
 new data, so a test set or a production batch never influences how it is cleaned.
 
 ```python
-import automatedcleaning as ac
+import mlpilot as ac
 
 pipe = ac.default_cleaning_pipeline()
 train_clean = pipe.fit_transform(train_df)   # learn the rules on training data
@@ -111,7 +111,7 @@ building your own non-interactive pipeline. These delegate to the Rust backend:
 
 ```python
 import polars as pl
-import automatedcleaning as ac
+import mlpilot as ac
 
 df = ac.load_data("dataset.csv")
 
@@ -138,7 +138,7 @@ ac.preprocess_text("I can't wait!! Visit https://x.co @bob 😀 it's GR8")
 ```
 
 <details>
-<summary><b>All additional cleaning steps (<code>automatedcleaning.steps</code>)</b></summary>
+<summary><b>All additional cleaning steps (<code>mlpilot.steps</code>)</b></summary>
 
 
 Beyond the core pipeline, ~45 focused, composable steps are available directly
@@ -180,7 +180,7 @@ Steps that need optional libraries (`detect_language`, `redact_profanity`,
 `correct_spelling_text`) are installed via the extra:
 
 ```bash
-pip install "AutomatedCleaning[text]"
+pip install "mlpilot[text]"
 ```
 
 </details>

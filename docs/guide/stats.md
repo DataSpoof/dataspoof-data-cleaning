@@ -2,7 +2,7 @@
 
 
 ```python
-from automatedcleaning import stats
+from mlpilot import stats
 
 stats.compare_groups(df, value="revenue", group="region")
 # -> one-way ANOVA (or Welch / Kruskal-Wallis), omega-squared, Tukey pairwise comparisons, plain English

@@ -1,6 +1,6 @@
-//! Rust compute backend for the AutomatedCleaning library.
+//! Rust compute backend for the MLPilot library.
 //!
-//! Exposed to Python as the `automatedcleaning._rustcore` extension module.
+//! Exposed to Python as the `mlpilot._rustcore` extension module.
 //! Each function takes plain Python lists (converted automatically by PyO3) so
 //! the Python frontend can hand columns straight from Polars/pandas.
 
@@ -176,7 +176,7 @@ fn replace_disguised_missing(
 
 #[pymodule]
 fn _rustcore(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("__doc__", "Rust compute backend for AutomatedCleaning.")?;
+    m.add("__doc__", "Rust compute backend for MLPilot.")?;
     m.add_function(wrap_pyfunction!(preprocess_texts, m)?)?;
     m.add_function(wrap_pyfunction!(strip_symbols, m)?)?;
     m.add_function(wrap_pyfunction!(skewness, m)?)?;

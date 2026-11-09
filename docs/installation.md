@@ -2,9 +2,9 @@
 
 
 ```bash
-pip install AutomatedCleaning                    # lean core (pipelines, quality, features, AutoML, …)
-pip install "AutomatedCleaning[sql,excel]"       # + the extras you need (see below)
-pip install "AutomatedCleaning[all]"             # everything, like 1.x installed by default
+pip install mlpilot                    # lean core (pipelines, quality, features, AutoML, …)
+pip install "mlpilot[sql,excel]"       # + the extras you need (see below)
+pip install "mlpilot[all]"             # everything, like 1.x installed by default
 ```
 
 Since 2.0, the core install no longer pulls in the heavy dependencies (NLTK, Plotly, Presidio,
@@ -12,7 +12,7 @@ LangChain). Those features ask for their extra when you use them. Importing the 
 downloads data, writes files or changes your logging. Set `AC_OFFLINE=1` to guarantee no
 network use at all.
 
-The import name is `automatedcleaning` (`import automatedcleaning as ac`). It needs
+The import name is `mlpilot` (`import mlpilot as ac`). It needs
 **Python 3.11+**.
 
 > **Platform note:** PyPI currently has a prebuilt wheel for **Windows**. On Linux and macOS,
@@ -38,6 +38,39 @@ The import name is `automatedcleaning` (`import automatedcleaning as ac`). It ne
 | `serve` | gunicorn / waitress | production REST serving |
 | `llm` | anthropic, langchain-anthropic | Claude-written narratives and AI categorical fixes |
 | `text` | langdetect, better-profanity, pyspellchecker | language / profanity / spelling steps |
+
+### Moving from AutomatedCleaning
+
+MLPilot is the new name of **AutomatedCleaning** (renamed in 2.1.0, when the library had grown from
+data cleaning into the whole model lifecycle). Nothing else changed.
+
+```bash
+pip uninstall AutomatedCleaning && pip install mlpilot
+```
+
+| Before | Now |
+|---|---|
+| `pip install AutomatedCleaning` | `pip install mlpilot` |
+| `import automatedcleaning as ac` | `import mlpilot as ac` |
+| `automatedcleaning serve ...` (CLI) | `mlpilot serve ...` |
+| `AutomatedCleaningWarning` | `MLPilotWarning` (the old name still works) |
+
+**What keeps working without changes:**
+- **Saved artifacts:** models, registries, monitors and pipelines saved by AutomatedCleaning load
+  as before, including raw pickles that refer to `automatedcleaning.*` classes.
+- **Old imports:** once `mlpilot` is installed, `import automatedcleaning` still works and gives
+  the same library.
+- **Running services:** the `AC_*` environment variables and the `ac_*` Prometheus metrics keep
+  their names, so deployments and dashboards are unaffected.
+- **The old package name:** `pip install AutomatedCleaning` now installs MLPilot through a small
+  forwarding package (2.0.1).
+
+**Renamed with the library:**
+- the OPA policy package (`data.mlpilot`) and the Prometheus job (`mlpilot`);
+- the Helm chart (`mlpilot-hub`);
+- the MLflow tag prefix (`mlpilot.`) and the default OpenLineage namespace.
+
+Update these if you deployed them from 2.0.0.
 
 <details>
 <summary><b>Install from source</b></summary>

@@ -1,4 +1,4 @@
-# Scrapes AutomatedCleaning model services (GET /metrics) and loads the alert rules.
+# Scrapes MLPilot model services (GET /metrics) and loads the alert rules.
 # Replace the target with your service(s); on Kubernetes use kubernetes_sd_configs instead.
 global:
   scrape_interval: 15s
@@ -13,7 +13,7 @@ rule_files:
 #         - targets: ["alertmanager:9093"]
 
 scrape_configs:
-  - job_name: automatedcleaning
+  - job_name: mlpilot
     metrics_path: /metrics
     # If the service runs with public_metrics=False / AC_PUBLIC_METRICS=0, send the API key:
     # authorization: {type: ApiKey, credentials_file: /etc/prometheus/model_api_key}   (or a header proxy)

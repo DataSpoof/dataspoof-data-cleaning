@@ -77,7 +77,7 @@ jobs:
       - name: Import must not load heavy optional packages or touch the network
         run: |
           cd /tmp && python -c "
-          import sys, automatedcleaning
+          import sys, mlpilot
           heavy = [m for m in ('nltk','plotly','matplotlib','presidio_analyzer','langchain_anthropic') if m in sys.modules]
           assert not heavy, heavy
           print('ok')"
@@ -239,7 +239,7 @@ jobs:
     needs: [test, core-only, typecheck, security, linux, windows, macos, sdist]
     environment:
       name: pypi
-      url: https://pypi.org/project/AutomatedCleaning/
+      url: https://pypi.org/project/mlpilot/
     permissions:
       id-token: write          # PyPI Trusted Publishing (OIDC) + Sigstore signing
       attestations: write      # build-provenance attestations

@@ -38,7 +38,7 @@ tests:
   - name: service down
     interval: 1m
     input_series:
-      - series: 'up{job="automatedcleaning",instance="model:8000"}'
+      - series: 'up{job="mlpilot",instance="model:8000"}'
         values: '1 1 0 0 0 0'
     alert_rule_test:
       - eval_time: 3m
@@ -47,7 +47,7 @@ tests:
       - eval_time: 5m
         alertname: ACModelServiceDown
         exp_alerts:
-          - exp_labels: {severity: critical, team: ml-platform, job: automatedcleaning, instance: "model:8000"}
+          - exp_labels: {severity: critical, team: ml-platform, job: mlpilot, instance: "model:8000"}
             exp_annotations:
               summary: "Model service model:8000 is down"
               description: "Prometheus has not been able to scrape model:8000 for 2 minutes."

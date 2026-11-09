@@ -1,5 +1,5 @@
 # Image & audio
 
-::: automatedcleaning.media
+::: mlpilot.media
     options:
       show_submodules: true

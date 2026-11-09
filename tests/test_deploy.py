@@ -11,8 +11,8 @@ import polars as pl
 import pytest
 from sklearn.datasets import make_classification
 
-import automatedcleaning as ac
-from automatedcleaning.deploy import load_pickle
+import mlpilot as ac
+from mlpilot.deploy import load_pickle
 
 FAST = dict(time_budget=30, cv=3, verbose=False, max_trials=2, include=["logistic_regression", "random_forest"])
 
@@ -142,16 +142,16 @@ def test_build_docker_context(tmp_path, data, model):
     out = ac.build_docker(model, tmp_path / "ctx", name="Churn Model!", version="7", port=9000)
     docker = (out / "Dockerfile").read_text()
     assert "USER app" in docker and "HEALTHCHECK" in docker and "AC_PORT=9000" in docker
-    assert '"automatedcleaning.deploy", "container"' in docker and "AC_MODEL_VERSION=\"7\"" in docker
+    assert '"mlpilot.deploy", "container"' in docker and "AC_MODEL_VERSION=\"7\"" in docker
     assert "docker build -t churn-model" in docker
     reqs = (out / "requirements.txt").read_text()
-    assert "automatedcleaning" in reqs and "gunicorn" in reqs and "scikit-learn==" in reqs
+    assert "mlpilot" in reqs and "gunicorn" in reqs and "scikit-learn==" in reqs
     assert ac.load_model(out / "model").predict(data[1]).len() == 80
-    local = tmp_path / "automatedcleaning-9.9.9.tar.gz"
+    local = tmp_path / "mlpilot-9.9.9.tar.gz"
     local.write_bytes(b"fake")
     out2 = ac.build_docker(model, tmp_path / "ctx2", library_spec=str(local))
     assert (out2 / "dist" / local.name).exists()
-    assert "/tmp/dist/automatedcleaning-9.9.9.tar.gz" in (out2 / "requirements.txt").read_text()
+    assert "/tmp/dist/mlpilot-9.9.9.tar.gz" in (out2 / "requirements.txt").read_text()
 
 
 def test_wsgi_entry_point(tmp_path, monkeypatch, model, data):
@@ -159,14 +159,14 @@ def test_wsgi_entry_point(tmp_path, monkeypatch, model, data):
     path = model.save(tmp_path / "m")
     monkeypatch.setenv("AC_MODEL_PATH", str(path))
     monkeypatch.setenv("AC_API_KEY", "k")
-    import automatedcleaning.deploy.wsgi as wsgi
+    import mlpilot.deploy.wsgi as wsgi
     wsgi = importlib.reload(wsgi)
     assert call(wsgi.app, "GET", "/metadata", key="k")[0] == 200
     assert call(wsgi.app, "GET", "/metadata")[0] == 401
 
 
 def test_cli(tmp_path, data, model, capsys):
-    from automatedcleaning.deploy.cli import main
+    from mlpilot.deploy.cli import main
     _, test = data
     path = model.save(tmp_path / "m")
     test.write_csv(tmp_path / "in.csv")

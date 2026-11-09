@@ -1,0 +1,29 @@
+# The final release of the old project name. It installs MLPilot and forwards to it.
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "AutomatedCleaning"
+version = "2.0.1"
+description = "AutomatedCleaning is now MLPilot: this package installs mlpilot and forwards to it."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Abhishek Kumar Singh", email = "dataspoof007@gmail.com" }]
+dependencies = ["mlpilot>=2.1.0"]
+classifiers = [
+    "Development Status :: 7 - Inactive",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://pypi.org/project/mlpilot/"
+Source = "https://github.com/DataSpoof/dataspoof-data-cleaning"
+
+[project.scripts]
+automatedcleaning = "mlpilot.deploy.cli:main"
+
+[tool.setuptools]
+packages = ["automatedcleaning"]

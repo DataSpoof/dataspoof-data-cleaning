@@ -2,12 +2,12 @@
 
 
 ```bash
-automatedcleaning cicd init --provider github --name churn --data data/train.parquet --target churned
+mlpilot cicd init --provider github --name churn --data data/train.parquet --target churned
 #  -> .github/workflows/model-churn.yml, gates.yml, environments.yml
-automatedcleaning train --data data/train.parquet --target churned --out build/model --group customer_id
-automatedcleaning gate  --model build/model --data build/test.parquet --gates gates.yml     # exit 1 = blocked
-automatedcleaning register --model build/model --registry registry/dev --name churn --metrics build/metrics.json
-automatedcleaning release --config environments.yml --name churn --version 7 --from qa --to prod \
+mlpilot train --data data/train.parquet --target churned --out build/model --group customer_id
+mlpilot gate  --model build/model --data build/test.parquet --gates gates.yml     # exit 1 = blocked
+mlpilot register --model build/model --registry registry/dev --name churn --metrics build/metrics.json
+mlpilot release --config environments.yml --name churn --version 7 --from qa --to prod \
                           --released-by ana --approved-by bob,carol
 ```
 

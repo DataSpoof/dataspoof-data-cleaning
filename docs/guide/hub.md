@@ -1,16 +1,16 @@
 # Hub: the platform server
 
 
-A multi-user server for teams, installed with `pip install "AutomatedCleaning[server]"`:
+A multi-user server for teams, installed with `pip install "mlpilot[server]"`:
 
 ```bash
-automatedcleaning hub create-admin --name admin      # prints an API token once
-automatedcleaning hub serve --host 0.0.0.0 --port 8080
+mlpilot hub create-admin --name admin      # prints an API token once
+mlpilot hub serve --host 0.0.0.0 --port 8080
 # or: docker compose -f deploy/hub/docker-compose.yml up -d   (Hub + PostgreSQL)
 ```
 
 ```python
-from automatedcleaning.hub import HubClient
+from mlpilot.hub import HubClient
 hub = HubClient("https://hub.example.com", token=os.environ["AC_HUB_TOKEN"])
 run = hub.start_run("churn", experiment="weekly", name="automl")
 v = hub.register("churn", "churn-model", model, run_id=run["id"], metrics={"test_roc_auc": 0.91})

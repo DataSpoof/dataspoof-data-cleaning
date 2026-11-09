@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from automatedcleaning import secretstore as ss
+from mlpilot import secretstore as ss
 
 
 @pytest.fixture(autouse=True)

@@ -30,7 +30,7 @@ needed.
 ### Incidents and delayed labels
 
 ```python
-from automatedcleaning.monitoring import pagerduty_alert, opsgenie_alert, join_labels, sql_sink
+from mlpilot.monitoring import pagerduty_alert, opsgenie_alert, join_labels, sql_sink
 mon.on_alert(pagerduty_alert(routing_key))       # one incident per model and alert kind (deduplicated)
 mon.on_check(sql_sink(ac.SQLSource(url)))        # every check result -> a warehouse table for BI
 joined = join_labels("preds.jsonl", outcomes, on="order_id")   # labels that arrived days later

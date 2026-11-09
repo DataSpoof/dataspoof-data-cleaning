@@ -5,9 +5,9 @@ import polars as pl
 import pytest
 from sklearn.linear_model import LogisticRegression
 
-import automatedcleaning as ac
-from automatedcleaning.poisoning import poisoning_report
-from automatedcleaning.robustness import robustness_report
+import mlpilot as ac
+from mlpilot.poisoning import poisoning_report
+from mlpilot.robustness import robustness_report
 
 FAST = dict(time_budget=30, cv=3, verbose=False, max_trials=1)
 

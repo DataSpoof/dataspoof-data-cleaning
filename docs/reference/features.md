@@ -1,5 +1,5 @@
 # Feature engineering
 
-::: automatedcleaning.features
+::: mlpilot.features
     options:
       show_submodules: true

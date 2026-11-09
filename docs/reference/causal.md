@@ -1,5 +1,5 @@
 # Causal & uplift
 
-::: automatedcleaning.causal
+::: mlpilot.causal
     options:
       show_submodules: true

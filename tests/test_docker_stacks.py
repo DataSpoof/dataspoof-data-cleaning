@@ -27,7 +27,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
+import mlpilot as ac
 
 ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(os.environ.get("AC_DOCKER_TESTS") != "1" or not shutil.which("docker"),
@@ -145,7 +145,7 @@ def test_prometheus_scrapes_live_model_and_alerts(model_server, monitoring_stack
     assert float(psi[0]["value"][1]) > 0.25 and psi[0]["metric"]["model"] == "churn"
     assert float(query("ac_live_accuracy")[0]["value"][1]) == pytest.approx(0.75)
     assert query('ac_performance{kind="estimated"}')
-    up = query('up{job="automatedcleaning"}')
+    up = query('up{job="mlpilot"}')
     assert up and up[0]["value"][1] == "1"
     rules = http("GET", f"{prom}/api/v1/rules")[1]["data"]["groups"]
     names = {r["name"] for g in rules for r in g["rules"]}
@@ -164,7 +164,7 @@ def test_grafana_dashboard_is_provisioned_and_every_query_runs(model_server, mon
     status, dash = wait_until(lambda: (lambda r: r if r[0] == 200 else None)(
         http("GET", f"{graf}/api/dashboards/uid/ac-model", auth=auth)), what="dashboard provisioned")
     panels = [p for p in dash["dashboard"]["panels"] if p["type"] != "row"]
-    assert dash["meta"]["folderTitle"] == "AutomatedCleaning" and len(panels) == 20
+    assert dash["meta"]["folderTitle"] == "MLPilot" and len(panels) == 20
     exprs = [t["expr"] for p in panels for t in p.get("targets", [])]
     for e in exprs:
         q = (e.replace("$model", ".*").replace("$job", ".*").replace("$__rate_interval", "1m"))
@@ -198,7 +198,7 @@ def vault():
 def test_vault_token_approle_kv1_kv2_and_no_leaks(vault, monkeypatch, tmp_path):
     import io as _io
 
-    from automatedcleaning import secretstore as ss
+    from mlpilot import secretstore as ss
     addr, root = vault
     admin = ss.VaultClient(addr, token=root)
     admin.write("secret/ml/hub", {"database_url": f"sqlite:///{(tmp_path / 'vault-hub.db').as_posix()}",
@@ -241,7 +241,7 @@ def test_vault_token_approle_kv1_kv2_and_no_leaks(vault, monkeypatch, tmp_path):
                "wsgi.input": _io.BytesIO(b""), "HTTP_X_API_KEY": key}
         app(env, lambda s, h, label=label: status.update({label: s}))
     assert status["ok"].startswith("200") and status["bad"].startswith("401")
-    from automatedcleaning.ingestion import SQLSource
+    from mlpilot.ingestion import SQLSource
     db = SQLSource("vault://secret/ml/hub#warehouse")
     db.execute("CREATE TABLE t (x INTEGER)")
     db.insert("t", [{"x": 1}, {"x": 2}])
@@ -249,7 +249,7 @@ def test_vault_token_approle_kv1_kv2_and_no_leaks(vault, monkeypatch, tmp_path):
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
-    from automatedcleaning.hub.app import create_app
+    from mlpilot.hub.app import create_app
     hub = TestClient(create_app(database_url="vault://secret/ml/hub#database_url", artifact_root=str(tmp_path / "a")))
     assert hub.get("/health").json() == {"status": "ok", "database": "ok"}
     assert (tmp_path / "vault-hub.db").exists()
@@ -276,9 +276,9 @@ def test_hub_with_real_opa_policies(opa_server, tmp_path):
     from fastapi.testclient import TestClient
     from sklearn.datasets import make_classification
 
-    from automatedcleaning.hub.app import bootstrap_admin, create_app
-    from automatedcleaning.hub.policy import OPAPolicy
-    from automatedcleaning.hub.storage import tar_directory
+    from mlpilot.hub.app import bootstrap_admin, create_app
+    from mlpilot.hub.policy import OPAPolicy
+    from mlpilot.hub.storage import tar_directory
     url = opa_server
     db_url = f"sqlite:///{(tmp_path / 'hub.db').as_posix()}"
     root_tok = bootstrap_admin(db_url, name="root", email="root@corp.com")
@@ -310,11 +310,11 @@ def test_hub_with_real_opa_policies(opa_server, tmp_path):
     assert tr(root_tok, "staging").status_code == 200
     assert tr(root_tok, "production").json()["version"]["stage"] == "production"
     # a change freeze pushed to OPA at runtime: writes refused, reads fine
-    assert http("PUT", f"{url}/v1/data/automatedcleaning/config/frozen_workspaces", ["churn"])[0] == 204
+    assert http("PUT", f"{url}/v1/data/mlpilot/config/frozen_workspaces", ["churn"])[0] == 204
     frozen = client.post("/api/workspaces/churn/runs", json={"experiment": "e", "name": "r"}, headers=H(ci))
     assert frozen.status_code == 403 and "change freeze" in frozen.json()["detail"]
     assert client.get("/api/workspaces/churn/models", headers=H(ci)).status_code == 200
-    assert http("PUT", f"{url}/v1/data/automatedcleaning/config/frozen_workspaces", [])[0] == 204
+    assert http("PUT", f"{url}/v1/data/mlpilot/config/frozen_workspaces", [])[0] == 204
     # refusals stay in the tamper-evident audit trail
     audit = client.get("/api/audit", headers=H(root_tok)).json()
     entries = audit["entries"] if isinstance(audit, dict) else audit
@@ -352,7 +352,7 @@ def marquez():
 
 
 def test_openlineage_events_in_marquez(marquez):
-    from automatedcleaning.lineage import HttpTransport, Lineage, dataset
+    from mlpilot.lineage import HttpTransport, Lineage, dataset
     lin = Lineage(HttpTransport(marquez), namespace="acme", strict=True)
     raw = pl.DataFrame({"id": [1, 2, 3], "spend": [10.0, None, 30.0]})
     with lin.run("clean_customers", inputs=[dataset("s3://raw/customers.csv", raw)],
@@ -371,18 +371,18 @@ def test_openlineage_events_in_marquez(marquez):
     assert j["latestRun"]["state"] == "COMPLETED"
     assert wait_until(lambda: job("broken"))["latestRun"]["state"] == "FAILED"
     assert job("clean_customers")["description"] == "Dedup + impute"
-    status, ds = http("GET", f"{marquez}/api/v1/namespaces/automatedcleaning/datasets/warehouse.customers_clean")
+    status, ds = http("GET", f"{marquez}/api/v1/namespaces/mlpilot/datasets/warehouse.customers_clean")
     assert status == 200 and [f["name"] for f in ds["fields"]] == ["id", "spend"]
-    node = urllib.parse.quote("dataset:automatedcleaning:models/churn/v4", safe="")
+    node = urllib.parse.quote("dataset:mlpilot:models/churn/v4", safe="")
     status, graph = http("GET", f"{marquez}/api/v1/lineage?nodeId={node}&depth=10")
     ids = {n["id"] for n in graph["graph"]}
     assert {"job:acme:train_churn", "job:acme:clean_customers", "dataset:s3://raw:customers.csv",
-            "dataset:automatedcleaning:warehouse.customers_clean"} <= ids
+            "dataset:mlpilot:warehouse.customers_clean"} <= ids
 
 
 # ═══════════════════════════════════ actionlint ═════════════════════════════════
 def test_workflows_pass_actionlint(tmp_path):
-    from automatedcleaning.cicd import init_cicd
+    from mlpilot.cicd import init_cicd
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     init_cicd("github", name="churn", data="data/train.parquet", target="churned", out=tmp_path)
     shutil.copytree(ROOT / ".github" / "workflows", tmp_path / ".github" / "workflows", dirs_exist_ok=True)

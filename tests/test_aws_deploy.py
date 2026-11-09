@@ -25,7 +25,7 @@ IMAGE = "123456789012.dkr.ecr.us-east-1.amazonaws.com/ml/churn:4"
 def test_create_then_blue_green_update_and_prune(aws, monkeypatch):
     import boto3
 
-    from automatedcleaning.deploy import aws as acaws
+    from mlpilot.deploy import aws as acaws
     stamps = iter(["20261109010101", "20261109020202", "20261109030303"])
     monkeypatch.setattr(acaws, "_stamp", lambda: next(stamps))
     sm = boto3.client("sagemaker")
@@ -75,7 +75,7 @@ def test_create_then_blue_green_update_and_prune(aws, monkeypatch):
 def test_push_image_creates_repo_and_runs_docker(aws, monkeypatch):
     import boto3
 
-    from automatedcleaning.deploy import aws as acaws
+    from mlpilot.deploy import aws as acaws
     calls = []
 
     def fake_run(cmd, input=None, capture_output=True, text=True):

@@ -3,6 +3,25 @@
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/)
 (see the [versioning policy](https://dataspoof.github.io/dataspoof-data-cleaning/policies/)).
 
+## [2.1.0] — 2026-11-09
+
+### Renamed: AutomatedCleaning is now MLPilot
+- **Names:**
+  - the distribution is `mlpilot` (`pip install mlpilot`);
+  - the import is `import mlpilot`, and the CLI is `mlpilot`;
+  - `MLPilotWarning` replaces `AutomatedCleaningWarning`, which remains as an alias.
+- **Compatibility:**
+  - `import automatedcleaning` and pickles that refer to `automatedcleaning.*` classes resolve to
+    the same `mlpilot` modules, so models saved by AutomatedCleaning keep loading with the same
+    classes;
+  - the `AutomatedCleaning` project on PyPI gets a final 2.0.1 that installs `mlpilot`.
+- **Unchanged:** the `AC_*` environment variables, the `ac_*` Prometheus metrics and the saved-file
+  formats (`dataspoof.*`).
+- **Renamed with the library:**
+  - the Helm chart (`mlpilot-hub`), the OPA policy package (`data.mlpilot`) and the Prometheus job;
+  - the Grafana dashboard file;
+  - the MLflow tag prefix and the default OpenLineage namespace.
+
 ## [2.0.0] — 2026-11-09
 
 ### Breaking

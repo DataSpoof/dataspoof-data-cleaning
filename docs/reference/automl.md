@@ -1,5 +1,5 @@
 # AutoML
 
-::: automatedcleaning.automl
+::: mlpilot.automl
     options:
       show_submodules: true

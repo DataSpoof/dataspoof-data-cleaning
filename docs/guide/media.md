@@ -2,7 +2,7 @@
 
 
 ```python
-from automatedcleaning import media
+from mlpilot import media
 
 scan = media.scan_images("photos/", label_from_folder=True)      # one row per file
 print(media.image_quality_report(scan))   # corrupt, exact & near duplicates, tiny, dark, blurry, mixed modes, imbalance
@@ -16,7 +16,7 @@ clips = media.AudioPreprocessor(16000, duration=3.0).transform(audio["path"])   
 feats = media.audio_features(audio["path"])                       # MFCCs + spectral features for AutoML
 ```
 
-**Images** (`pip install "AutomatedCleaning[image]"`):
+**Images** (`pip install "mlpilot[image]"`):
 - Phone-photo rotation (EXIF) is fixed automatically.
 - Near-duplicates are found by perceptual hashing, and blur is measured by the variance of the
   Laplacian.

@@ -1,4 +1,4 @@
-<svg viewBox="0 0 1320 896" role="img" aria-label="AutomatedCleaning workflow in four lanes: data in, build and validate, release through isolated dev, QA and prod registries, and operate with feedback, monitoring and a retraining loop back to AutoML. Five gates can stop a run." xmlns="http://www.w3.org/2000/svg" width="1320" height="896"><title>AutomatedCleaning workflow</title><style>
+<svg viewBox="0 0 1320 896" role="img" aria-label="MLPilot workflow in four lanes: data in, build and validate, release through isolated dev, QA and prod registries, and operate with feedback, monitoring and a retraining loop back to AutoML. Five gates can stop a run." xmlns="http://www.w3.org/2000/svg" width="1320" height="896"><title>MLPilot workflow</title><style>
 svg { --bg:#ffffff; --surface:#ffffff; --ink:#18212b; --muted:#5a6673; --line:#a3aeb9; --accent:#1f5fbf;
   --loop:#c4521b; --gate:#a86a00; --gate-soft:#fff4dd; --rail:#eef1f4; }
 @media (prefers-color-scheme: dark) { svg { --bg:#0d1117; --surface:#161b22; --ink:#e6edf3; --muted:#9aa8b5;

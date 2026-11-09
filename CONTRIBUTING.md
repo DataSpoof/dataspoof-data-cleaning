@@ -23,7 +23,7 @@ mkdocs build --strict  # if you changed the docs
 
 - **Tests:** add tests for every change. Tests must run offline; set `AC_OFFLINE=1` to check.
   Use `pytest.importorskip` for optional dependencies.
-- **New pipeline steps:** subclass `automatedcleaning.Step` and register it with
+- **New pipeline steps:** subclass `mlpilot.Step` and register it with
   `@register_step`. Learn in `_fit` (return JSON-serialisable state) and replay in
   `_transform`. Steps that drop rows must implement `row_mask()`.
 - **`core/` stays independent:** it must not import from the rest of the package. A test

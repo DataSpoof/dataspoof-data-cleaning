@@ -2,7 +2,7 @@
 
 
 ```python
-from automatedcleaning.lineage import dataset
+from mlpilot.lineage import dataset
 lin = ac.Lineage.from_env()                       # OPENLINEAGE_URL (Marquez, DataHub, Atlan...) and/or a file
 with lin.run("train_churn", inputs=[dataset("warehouse.customers", train_df)],
              outputs=[dataset("models/churn/v7")]):
@@ -10,11 +10,11 @@ with lin.run("train_churn", inputs=[dataset("warehouse.customers", train_df)],
 lin.emit_tracked_run(run)                          # existing tracker runs and dataset versions, too
 ac.LineageGraph.from_file("lineage.jsonl").upstream("models/churn/v7")
 
-from automatedcleaning.integrations import aws_glue
+from mlpilot.integrations import aws_glue
 aws_glue.write_table(df, "analytics", "customers", "s3://lake/customers/", partition_by=["country"])
 aws_glue.read_table("analytics", "customers"); aws_glue.run_job("nightly-etl", {"--date": "2026-11-08"})
 
-from automatedcleaning.integrations.azure_data_factory import DataFactory
+from mlpilot.integrations.azure_data_factory import DataFactory
 DataFactory(sub, "data-rg", "corp-adf").run_pipeline("CopyOrders", {"date": "2026-11-08"})
 ```
 

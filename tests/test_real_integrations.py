@@ -25,7 +25,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
+import mlpilot as ac
 
 os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
 has = lambda m: importlib.util.find_spec(m) is not None  # noqa: E731
@@ -128,14 +128,14 @@ def churn():
 def test_mlflow_export_run_and_tracker(mlflow_uri, tmp_path):
     from mlflow.tracking import MlflowClient
 
-    from automatedcleaning.integrations import mlflow as acm
+    from mlpilot.integrations import mlflow as acm
     tracker = ac.Tracker(tmp_path / "runs", experiment="churn-exp")
     with tracker.start_run("baseline", tags={"team": "growth"}, params={"lr": 0.1, "depth": None}) as run:
         for step, loss in enumerate([0.9, 0.6, 0.45]):
             run.log_metric("loss", loss, step=step)
         run.log_metric("auc", 0.81)
         run.log_dataset(pl.DataFrame({"a": [1, 2, 3]}), "train")
-        run.log_text("hello from automatedcleaning", "notes.txt")
+        run.log_text("hello from mlpilot", "notes.txt")
     with tracker.start_run("second") as run2:
         run2.log_metric("auc", 0.84)
 
@@ -151,7 +151,7 @@ def test_mlflow_export_run_and_tracker(mlflow_uri, tmp_path):
     assert got.data.metrics["auc"] == pytest.approx(0.81)
     assert any(a.path == "notes.txt" for a in client.list_artifacts(rid))
     local = client.download_artifacts(rid, "notes.txt", str(tmp_path))
-    assert open(local, encoding="utf-8").read() == "hello from automatedcleaning"
+    assert open(local, encoding="utf-8").read() == "hello from mlpilot"
     # idempotent: exporting again (alone or via the whole tracker) doesn't duplicate
     assert acm.export_run(run, tracking_uri=mlflow_uri) == rid
     mapping = acm.export_tracker(tracker, tracking_uri=mlflow_uri)
@@ -164,7 +164,7 @@ def test_mlflow_export_run_and_tracker(mlflow_uri, tmp_path):
 def test_mlflow_log_automl_registers_a_working_pyfunc(mlflow_uri, churn):
     import mlflow
 
-    from automatedcleaning.integrations import mlflow as acm
+    from mlpilot.integrations import mlflow as acm
     model, test = churn
     info = acm.log_automl(model, test, tracking_uri=mlflow_uri, experiment="churn-models", register_as="churn")
     assert info.registered_model_version is not None and int(info.registered_model_version) >= 1
@@ -186,7 +186,7 @@ def test_mlflow_log_automl_registers_a_working_pyfunc(mlflow_uri, churn):
 def test_mlflow_export_registry_maps_stages_to_aliases(mlflow_uri, churn, tmp_path):
     from mlflow.tracking import MlflowClient
 
-    from automatedcleaning.integrations import mlflow as acm
+    from mlpilot.integrations import mlflow as acm
     model, test = churn
     reg = ac.ModelRegistry(tmp_path / "reg")
     reg.register(model, "retention", metrics={"test_auc": 0.80}, description="first")
@@ -216,7 +216,7 @@ def test_mlflow_export_registry_maps_stages_to_aliases(mlflow_uri, churn, tmp_pa
 @needs_mlflow
 def test_mlflow_models_serve_answers_http(mlflow_uri, churn, tmp_path):
     """The registered model runs in MLflow's own scoring server."""
-    from automatedcleaning.integrations import mlflow as acm
+    from mlpilot.integrations import mlflow as acm
     model, test = churn
     info = acm.log_automl(model, test, tracking_uri=mlflow_uri, experiment="churn-serve", register_as="churn-serve")
     port = _free_port()
@@ -255,7 +255,7 @@ def _force(func, path, _exc):
 
 @needs_dvc
 def test_dvc_track_versions_push_pull_and_old_revisions(tmp_path):
-    from automatedcleaning.integrations.dvc import DVCRepo
+    from mlpilot.integrations.dvc import DVCRepo
     repo = DVCRepo.init(tmp_path / "ml-data")
     repo.add_remote("storage", str(tmp_path / "remote"))
     df1 = pl.DataFrame({"id": [1, 2, 3], "spend": [10.0, 20.0, 30.0]})
@@ -292,7 +292,7 @@ def test_dvc_track_versions_push_pull_and_old_revisions(tmp_path):
 
 @needs_dvc
 def test_dvc_export_data_repository_history(tmp_path):
-    from automatedcleaning.integrations.dvc import DVCRepo, export_repository
+    from mlpilot.integrations.dvc import DVCRepo, export_repository
     data_repo = ac.DataRepository(tmp_path / "data_repo")
     frames = [pl.DataFrame({"k": list(range(n)), "v": [float(i * n) for i in range(n)]}) for n in (5, 8, 13)]
     for i, f in enumerate(frames, 1):
@@ -342,7 +342,7 @@ def our_store(tmp_path):
 
 @needs_feast
 def test_feast_export_matches_our_point_in_time_joins(our_store, tmp_path):
-    from automatedcleaning.integrations.feast import export_to_feast, feast_features, to_feast_entity_df
+    from mlpilot.integrations.feast import export_to_feast, feast_features, to_feast_entity_df
     store, entity_df, now = our_store
     fs = export_to_feast(store, tmp_path / "feast_repo", project="acparity")
     assert {v.name for v in fs.list_feature_views()} == {"customer_stats", "shelf_stock"}
@@ -382,7 +382,7 @@ def test_feast_export_matches_our_point_in_time_joins(our_store, tmp_path):
 
 @needs_feast
 def test_feast_online_store_matches_ours(our_store, tmp_path):
-    from automatedcleaning.integrations.feast import export_to_feast
+    from mlpilot.integrations.feast import export_to_feast
     store, _, now = our_store
     fs = export_to_feast(store, tmp_path / "feast_repo", project="aconline")
     latest = store._offline("customer_stats").collect().sort("as_of").group_by("customer_id").last()

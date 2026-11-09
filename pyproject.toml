@@ -3,12 +3,10 @@ requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [project]
-# PyPI requires the normalized (lowercase) distribution name in build artifacts.
-# This is the SAME project as "AutomatedCleaning" — `pip install AutomatedCleaning`
-# still works because pip normalizes names case-insensitively.
-name = "automatedcleaning"
-version = "2.0.0"
-description = "Automated data science, from raw data to monitored production models, with a Rust compute backend"
+# Formerly published as "AutomatedCleaning" (up to 2.0.0); that project now forwards here.
+name = "mlpilot"
+version = "2.1.0"
+description = "MLPilot (formerly AutomatedCleaning): automated data science, from raw data to monitored production models, with a Rust engine"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Abhishek Kumar Singh", email = "dataspoof007@gmail.com" }]
@@ -27,10 +25,10 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",
 ]
-keywords = ["data cleaning", "automl", "data quality", "mlops", "feature engineering", "model monitoring", "polars"]
+keywords = ["mlops", "automl", "data cleaning", "data quality", "feature engineering", "model monitoring", "polars"]
 
 # A lean core: what every module needs. Heavier dependencies live in the extras below
-# (pip install "AutomatedCleaning[all]" gets everything, like the 1.x releases did).
+# (pip install "mlpilot[all]" gets everything, like the 1.x releases did).
 dependencies = [
     "polars>=1.23",
     "pandas>=2.2",
@@ -98,7 +96,7 @@ onnx = [
     "skl2onnx>=1.17",
     "onnxruntime>=1.17",
 ]
-# The Hub platform server (automatedcleaning hub serve): API, SSO, registry, approvals, audit, UI.
+# The Hub platform server (mlpilot hub serve): API, SSO, registry, approvals, audit, UI.
 server = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
@@ -108,7 +106,7 @@ server = [
     "fsspec>=2024.2",
     "psycopg[binary]>=3.1",
 ]
-# Image and audio data (automatedcleaning.media). WAV audio needs nothing extra.
+# Image and audio data (mlpilot.media). WAV audio needs nothing extra.
 image = [
     "pillow>=10.0",
 ]
@@ -163,16 +161,16 @@ embeddings = [
 ]
 # Everything (what 1.x installed by default, plus every optional connector and integration).
 all = [
-    "automatedcleaning[nlp,dashboard,pii,llm,text,automl,explain,sql,excel,onnx,serve,optuna,skops,signing,server,image,audio,aws,azure]",
+    "mlpilot[nlp,dashboard,pii,llm,text,automl,explain,sql,excel,onnx,serve,optuna,skops,signing,server,image,audio,aws,azure]",
 ]
 dev = [
-    "automatedcleaning[all,test]",
+    "mlpilot[all,test]",
     "mypy>=1.10",
     "pip-audit>=2.7",
 ]
 
 [project.scripts]
-automatedcleaning = "automatedcleaning.deploy.cli:main"
+mlpilot = "mlpilot.deploy.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -186,10 +184,10 @@ Changelog = "https://github.com/DataSpoof/dataspoof-data-cleaning/blob/main/CHAN
 Issues = "https://github.com/DataSpoof/dataspoof-data-cleaning/issues"
 
 [tool.maturin]
-# Mixed Rust/Python project: the `automatedcleaning` package lives at the repo
+# Mixed Rust/Python project: the `mlpilot` package lives at the repo
 # root and the compiled extension is injected into it as `_rustcore`.
 python-source = "."
-module-name = "automatedcleaning._rustcore"
+module-name = "mlpilot._rustcore"
 features = ["pyo3/extension-module"]
 # The sdist is built from the working tree: keep local, machine-specific files out of it.
 exclude = [
@@ -198,11 +196,13 @@ exclude = [
     { path = "images/**/*", format = "sdist" },
     { path = "example.py", format = "sdist" },
     { path = "requirements.txt", format = "sdist" },
+    { path = "compat/**/*", format = "sdist" },
+    { path = "automatedcleaning/**/*", format = "sdist" },
 ]
 
 [tool.mypy]
 python_version = "3.11"
-packages = ["automatedcleaning"]
+packages = ["mlpilot"]
 ignore_missing_imports = true
 warn_unused_configs = true
 warn_redundant_casts = true
@@ -215,6 +215,6 @@ implicit_optional = true
 # Legacy modules from the 1.x interactive cleaner: type them gradually; listed here so the
 # debt is visible. New modules must type-check.
 [[tool.mypy.overrides]]
-module = ["automatedcleaning.cleaning", "automatedcleaning.steps", "automatedcleaning.quality.profile",
-          "automatedcleaning.quality.checks"]
+module = ["mlpilot.cleaning", "mlpilot.steps", "mlpilot.quality.profile",
+          "mlpilot.quality.checks"]
 ignore_errors = true

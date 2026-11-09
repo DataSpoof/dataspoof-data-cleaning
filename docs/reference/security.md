@@ -1,5 +1,5 @@
 # Model signing
 
-::: automatedcleaning.security
+::: mlpilot.security
     options:
       show_submodules: true

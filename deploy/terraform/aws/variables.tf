@@ -28,7 +28,7 @@ variable "eks_oidc_provider_arn" {
 
 variable "namespace" {
   type    = string
-  default = "automatedcleaning"
+  default = "mlpilot"
 }
 
 variable "artifact_bucket_name" {
@@ -37,7 +37,7 @@ variable "artifact_bucket_name" {
 
 variable "image_repository" {
   type    = string
-  default = "ghcr.io/dataspoof/automatedcleaning-hub"
+  default = "ghcr.io/dataspoof/mlpilot-hub"
 }
 
 variable "image_tag" {
@@ -78,7 +78,7 @@ variable "oidc_issuer" {
 
 variable "oidc_audience" {
   type    = string
-  default = "automatedcleaning-hub"
+  default = "mlpilot-hub"
 }
 
 variable "oidc_group_roles" {

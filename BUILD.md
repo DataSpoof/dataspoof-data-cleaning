@@ -12,7 +12,7 @@ src/
   lib.rs                       # PyO3 module: exposes functions to Python
   text.rs                      # text preprocessing (contractions, regex, stopwords)
   stats.rs                     # skewness, IQR, correlation, multicollinearity
-automatedcleaning/
+mlpilot/
   __init__.py                  # from .cleaning import *
   cleaning.py                  # Python frontend (I/O, ML, dashboard, PII, AI)
   _rustcore.*.pyd              # compiled Rust extension (built artifact)
@@ -37,10 +37,10 @@ Prereqs: Rust toolchain (`rustup`) and `maturin` (`pip install maturin`).
 ```bash
 # Build a release wheel (dist-ready, abi3 -> works on CPython 3.11+)
 maturin build --release
-# -> target/wheels/automatedcleaning-1.5.1-cp311-abi3-win_amd64.whl
+# -> target/wheels/mlpilot-1.5.1-cp311-abi3-win_amd64.whl
 
 # Install it
-pip install target/wheels/automatedcleaning-1.5.1-cp311-abi3-win_amd64.whl
+pip install target/wheels/mlpilot-1.5.1-cp311-abi3-win_amd64.whl
 
 # --- OR, for development (requires an active virtualenv) ---
 python -m venv .venv && .venv/Scripts/activate   # Windows

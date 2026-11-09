@@ -1,12 +1,12 @@
-# Prometheus alert rules for AutomatedCleaning model services (the REST API's /metrics).
+# Prometheus alert rules for MLPilot model services (the REST API's /metrics).
 # Validate:   promtool check rules alerts.yml
 # Unit tests: promtool test rules alerts_test.yml
 # Thresholds are starting points; tune them per model (labels: model, version, variant).
 groups:
-  - name: automatedcleaning-service
+  - name: mlpilot-service
     rules:
       - alert: ACModelServiceDown
-        expr: up{job="automatedcleaning"} == 0
+        expr: up{job="mlpilot"} == 0
         for: 2m
         labels: {severity: critical, team: ml-platform}
         annotations:
@@ -63,7 +63,7 @@ groups:
         annotations:
           summary: "{{ $labels.model }}: the shadow model disagrees on {{ $value | humanizePercentage }} of predictions"
 
-  - name: automatedcleaning-model-quality
+  - name: mlpilot-model-quality
     rules:
       - alert: ACDataDrift
         expr: max by (model) (ac_drift_share) >= 0.3

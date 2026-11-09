@@ -9,8 +9,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-import automatedcleaning as ac
-from automatedcleaning.insights import narrate, template_narrative
+import mlpilot as ac
+from mlpilot.insights import narrate, template_narrative
 
 ROOT = Path(__file__).resolve().parent.parent
 

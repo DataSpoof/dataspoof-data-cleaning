@@ -1,12 +1,12 @@
 [package]
-name = "automatedcleaning-rustcore"
-version = "2.0.0"
+name = "mlpilot-rustcore"
+version = "2.1.0"
 edition = "2021"
-description = "Rust compute backend for the AutomatedCleaning Python library"
+description = "Rust compute backend for the MLPilot Python library"
 license = "MIT"
 
 [lib]
-# The compiled artifact is imported from Python as `automatedcleaning._rustcore`.
+# The compiled artifact is imported from Python as `mlpilot._rustcore`.
 name = "_rustcore"
 crate-type = ["cdylib"]
 

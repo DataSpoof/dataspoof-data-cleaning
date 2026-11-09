@@ -1,5 +1,5 @@
 # Statistical testing
 
-::: automatedcleaning.stats
+::: mlpilot.stats
     options:
       show_submodules: true

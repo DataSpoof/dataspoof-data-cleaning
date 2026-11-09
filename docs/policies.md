@@ -2,7 +2,7 @@
 
 ## Versioning
 
-AutomatedCleaning follows [Semantic Versioning](https://semver.org/):
+MLPilot follows [Semantic Versioning](https://semver.org/):
 
 | Change | Version bump |
 |---|---|
@@ -10,7 +10,7 @@ AutomatedCleaning follows [Semantic Versioning](https://semver.org/):
 | New features that are backwards compatible | **minor** (2.0 → 2.1) |
 | Bug and security fixes | **patch** (2.0.0 → 2.0.1) |
 
-**The public API** is everything exported from `automatedcleaning` and the documented module
+**The public API** is everything exported from `mlpilot` and the documented module
 namespaces. Names that start with `_` are private and can change at any time.
 
 **Saved artifacts** (pipelines, contracts, monitors, registry metadata, model bundles) carry a

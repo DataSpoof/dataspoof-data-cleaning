@@ -1,3 +1,3 @@
 # Lineage
 
-::: automatedcleaning.lineage
+::: mlpilot.lineage

@@ -12,8 +12,8 @@ output/
 Cargo.lock
 
 # Compiled Rust extension dropped into the package for in-place testing
-automatedcleaning/*.pyd
-automatedcleaning/*.so
+mlpilot/*.pyd
+mlpilot/*.so
 
 # Python bytecode
 __pycache__/
@@ -21,3 +21,6 @@ __pycache__/
 
 # Documentation build output
 site/
+
+# Windows debug symbols from local Rust builds
+*.pdb
