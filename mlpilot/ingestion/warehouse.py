@@ -27,7 +27,7 @@ def _need(module: str, extra: str):
     try:
         return __import__(module, fromlist=["_"])
     except ImportError as exc:
-        raise ImportError(f'This connector needs {module}: pip install "mlpilot[{extra}]"') from exc
+        raise ImportError(f'This connector needs {module}: pip install "dataspoof-mlpilot[{extra}]"') from exc
 
 
 class SnowflakeSource:

@@ -1,6 +1,6 @@
 """Audio data: audit recordings, preprocess them consistently, and extract features for AutoML.
 
-WAV works out of the box (scipy); FLAC / OGG / MP3 … need ``pip install "mlpilot[audio]"``
+WAV works out of the box (scipy); FLAC / OGG / MP3 … need ``pip install "dataspoof-mlpilot[audio]"``
 (soundfile). Everything else — resampling, silence trimming, loudness normalisation, MFCCs and
 spectral features — is implemented with numpy/scipy (no librosa needed).
 
@@ -55,7 +55,7 @@ def read_audio(path):
         try:
             import soundfile as sf
         except ImportError as exc:
-            raise ImportError('Non-WAV audio needs soundfile: pip install "mlpilot[audio]"') from exc
+            raise ImportError('Non-WAV audio needs soundfile: pip install "dataspoof-mlpilot[audio]"') from exc
         data, sr = sf.read(path, dtype="float32", always_2d=True)
     if data.ndim == 1:
         data = data[:, None]

@@ -58,7 +58,7 @@ class ArtifactStore:
                 import fsspec
             except ImportError as exc:
                 raise ImportError('Object-storage artifacts need fsspec (+ s3fs / gcsfs / adlfs): '
-                                  'pip install "mlpilot[server]" s3fs') from exc
+                                  'pip install "dataspoof-mlpilot[server]" s3fs') from exc
             self.fs, self.base = fsspec.core.url_to_fs(self.root)
         else:
             self.fs, self.base = None, str(Path(self.root.removeprefix("file://")).resolve())

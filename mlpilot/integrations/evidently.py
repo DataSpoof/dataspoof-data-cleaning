@@ -23,7 +23,7 @@ try:
     from evidently import BinaryClassification, DataDefinition, Dataset, MulticlassClassification, Regression, Report
     from evidently.presets import ClassificationPreset, DataDriftPreset, RegressionPreset
 except ImportError as exc:                                   # pragma: no cover
-    raise ImportError('The Evidently integration needs evidently>=0.7: pip install "mlpilot[evidently]"') from exc
+    raise ImportError('The Evidently integration needs evidently>=0.7: pip install "dataspoof-mlpilot[evidently]"') from exc
 
 
 @dataclasses.dataclass

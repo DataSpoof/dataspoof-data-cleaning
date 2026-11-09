@@ -180,7 +180,7 @@ Steps that need optional libraries (`detect_language`, `redact_profanity`,
 `correct_spelling_text`) are installed via the extra:
 
 ```bash
-pip install "mlpilot[text]"
+pip install "dataspoof-mlpilot[text]"
 ```
 
 </details>

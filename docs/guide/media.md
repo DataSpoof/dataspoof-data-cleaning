@@ -16,7 +16,7 @@ clips = media.AudioPreprocessor(16000, duration=3.0).transform(audio["path"])   
 feats = media.audio_features(audio["path"])                       # MFCCs + spectral features for AutoML
 ```
 
-**Images** (`pip install "mlpilot[image]"`):
+**Images** (`pip install "dataspoof-mlpilot[image]"`):
 - Phone-photo rotation (EXIF) is fixed automatically.
 - Near-duplicates are found by perceptual hashing, and blur is measured by the variance of the
   Laplacian.

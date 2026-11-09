@@ -2,9 +2,9 @@
 
 
 ```bash
-pip install mlpilot                    # lean core (pipelines, quality, features, AutoML, …)
-pip install "mlpilot[sql,excel]"       # + the extras you need (see below)
-pip install "mlpilot[all]"             # everything, like 1.x installed by default
+pip install dataspoof-mlpilot                    # lean core (pipelines, quality, features, AutoML, …)
+pip install "dataspoof-mlpilot[sql,excel]"       # + the extras you need (see below)
+pip install "dataspoof-mlpilot[all]"             # everything, like 1.x installed by default
 ```
 
 Since 2.0, the core install no longer pulls in the heavy dependencies (NLTK, Plotly, Presidio,
@@ -44,13 +44,17 @@ The import name is `mlpilot` (`import mlpilot as ac`). It needs
 MLPilot is the new name of **AutomatedCleaning** (renamed in 2.1.0, when the library had grown from
 data cleaning into the whole model lifecycle). Nothing else changed.
 
+On PyPI it is **`dataspoof-mlpilot`**: PyPI treats `mlpilot` as too close to an existing project. You
+install `dataspoof-mlpilot`, and import and run `mlpilot`, the same way `pip install scikit-learn`
+gives you `import sklearn`.
+
 ```bash
-pip uninstall AutomatedCleaning && pip install mlpilot
+pip uninstall AutomatedCleaning && pip install dataspoof-mlpilot
 ```
 
 | Before | Now |
 |---|---|
-| `pip install AutomatedCleaning` | `pip install mlpilot` |
+| `pip install AutomatedCleaning` | `pip install dataspoof-mlpilot` |
 | `import automatedcleaning as ac` | `import mlpilot as ac` |
 | `automatedcleaning serve ...` (CLI) | `mlpilot serve ...` |
 | `AutomatedCleaningWarning` | `MLPilotWarning` (the old name still works) |
@@ -62,7 +66,7 @@ pip uninstall AutomatedCleaning && pip install mlpilot
   the same library.
 - **Running services:** the `AC_*` environment variables and the `ac_*` Prometheus metrics keep
   their names, so deployments and dashboards are unaffected.
-- **The old package name:** `pip install AutomatedCleaning` now installs MLPilot through a small
+- **The old package name:** `pip install AutomatedCleaning` now installs MLPilot (`dataspoof-mlpilot`) through a small
   forwarding package (2.0.1).
 
 **Renamed with the library:**

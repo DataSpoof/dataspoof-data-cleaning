@@ -35,7 +35,7 @@ import polars as pl
 try:
     import feast
 except ImportError as exc:                                   # pragma: no cover
-    raise ImportError('The Feast integration needs feast: pip install "mlpilot[feast]"') from exc
+    raise ImportError('The Feast integration needs feast: pip install "dataspoof-mlpilot[feast]"') from exc
 
 _FEAST_TYPES = {"Int8": "Int32", "Int16": "Int32", "Int32": "Int32", "Int64": "Int64", "UInt8": "Int32",
                 "UInt16": "Int32", "UInt32": "Int64", "UInt64": "Int64", "Float32": "Float32", "Float64": "Float64",

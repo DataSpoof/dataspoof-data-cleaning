@@ -53,7 +53,7 @@ def _to_skops(model, path: Path) -> Path:
     try:
         import skops.io as sio
     except ImportError as exc:
-        raise ImportError('skops export needs skops: pip install "mlpilot[skops]"') from exc
+        raise ImportError('skops export needs skops: pip install "dataspoof-mlpilot[skops]"') from exc
     from ..automl import AutoML
     if not isinstance(model, AutoML):
         raise TypeError("skops export supports AutoML models")
@@ -250,9 +250,9 @@ def build_docker(model, out_dir, *, name: str = "model", version: str = "1", por
     if library_spec is None:
         try:
             from importlib.metadata import version as _v
-            library_spec = f"mlpilot=={_v('mlpilot')}"
+            library_spec = f"dataspoof-mlpilot=={_v('dataspoof-mlpilot')}"
         except Exception:
-            library_spec = "mlpilot"
+            library_spec = "dataspoof-mlpilot"
     import sklearn
     reqs = [library_spec, f"scikit-learn=={sklearn.__version__}", "gunicorn>=22.0", *(extra_requirements or [])]
     manifest = json.loads((out / "model" / "manifest.json").read_text(encoding="utf-8"))

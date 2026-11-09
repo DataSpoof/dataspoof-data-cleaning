@@ -239,7 +239,7 @@ jobs:
     needs: [test, core-only, typecheck, security, linux, windows, macos, sdist]
     environment:
       name: pypi
-      url: https://pypi.org/project/mlpilot/
+      url: https://pypi.org/project/dataspoof-mlpilot/
     permissions:
       id-token: write          # PyPI Trusted Publishing (OIDC) + Sigstore signing
       attestations: write      # build-provenance attestations

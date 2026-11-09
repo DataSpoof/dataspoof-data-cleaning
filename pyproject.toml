@@ -4,7 +4,9 @@ build-backend = "maturin"
 
 [project]
 # Formerly published as "AutomatedCleaning" (up to 2.0.0); that project now forwards here.
-name = "mlpilot"
+# The PyPI name is "dataspoof-mlpilot" ("mlpilot" is too close to an existing "ml-pilot");
+# the import name and the CLI are `mlpilot`.
+name = "dataspoof-mlpilot"
 version = "2.1.0"
 description = "MLPilot (formerly AutomatedCleaning): automated data science, from raw data to monitored production models, with a Rust engine"
 readme = "README.md"
@@ -28,7 +30,7 @@ classifiers = [
 keywords = ["mlops", "automl", "data cleaning", "data quality", "feature engineering", "model monitoring", "polars"]
 
 # A lean core: what every module needs. Heavier dependencies live in the extras below
-# (pip install "mlpilot[all]" gets everything, like the 1.x releases did).
+# (pip install "dataspoof-mlpilot[all]" gets everything, like the 1.x releases did).
 dependencies = [
     "polars>=1.23",
     "pandas>=2.2",
@@ -161,10 +163,10 @@ embeddings = [
 ]
 # Everything (what 1.x installed by default, plus every optional connector and integration).
 all = [
-    "mlpilot[nlp,dashboard,pii,llm,text,automl,explain,sql,excel,onnx,serve,optuna,skops,signing,server,image,audio,aws,azure]",
+    "dataspoof-mlpilot[nlp,dashboard,pii,llm,text,automl,explain,sql,excel,onnx,serve,optuna,skops,signing,server,image,audio,aws,azure]",
 ]
 dev = [
-    "mlpilot[all,test]",
+    "dataspoof-mlpilot[all,test]",
     "mypy>=1.10",
     "pip-audit>=2.7",
 ]

@@ -58,7 +58,7 @@ def _dvc_cmd() -> list:
     exe = shutil.which("dvc")
     if exe:
         return [exe]
-    raise ImportError('The DVC integration needs dvc: pip install "mlpilot[dvc]"')
+    raise ImportError('The DVC integration needs dvc: pip install "dataspoof-mlpilot[dvc]"')
 
 
 def _git_cmd() -> list:

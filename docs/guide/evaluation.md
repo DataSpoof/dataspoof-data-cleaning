@@ -29,7 +29,7 @@ print(exp)                               # global importance (mean |SHAP|) + dir
 exp.global_importance()                  # feature, mean_abs_shap, share, direction
 exp.explain_row(0)                       # "P(Survived = 1) = 0.27 (average 0.42): Pclass = 3 (-0.174), ..."
 exp.for_row(0)                           # contributions for one row, largest first
-exp.to_shap()                            # a shap.Explanation for shap's plots: pip install "mlpilot[explain]"
+exp.to_shap()                            # a shap.Explanation for shap's plots: pip install "dataspoof-mlpilot[explain]"
 ac.partial_dependence(model, test, "Fare")   # average prediction as one feature varies
 ```
 

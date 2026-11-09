@@ -28,7 +28,7 @@ def _versions() -> dict:
         try:
             if mod == "mlpilot":
                 from importlib.metadata import version
-                out[mod] = version("mlpilot")
+                out[mod] = version("dataspoof-mlpilot")
             else:
                 out[mod] = __import__(mod).__version__
         except Exception:

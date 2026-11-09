@@ -73,7 +73,7 @@ def _eager(fmt: str, src, kw: dict) -> pl.DataFrame:
         try:
             return pl.read_excel(src, **kw)
         except ModuleNotFoundError as exc:
-            raise ImportError("Reading Excel needs fastexcel: pip install \"mlpilot[excel]\"") from exc
+            raise ImportError("Reading Excel needs fastexcel: pip install \"dataspoof-mlpilot[excel]\"") from exc
     if fmt == "ods":
         return pl.read_ods(src, **kw)
     raise ValueError(f"Unsupported format {fmt!r}")

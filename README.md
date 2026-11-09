@@ -8,7 +8,7 @@
 
 ### From raw data to a monitored production model — automated, explainable, auditable.
 
-[![PyPI](https://img.shields.io/pypi/v/mlpilot?color=2f6fde&label=PyPI)](https://pypi.org/project/mlpilot/)
+[![PyPI](https://img.shields.io/pypi/v/dataspoof-mlpilot?color=2f6fde&label=PyPI)](https://pypi.org/project/dataspoof-mlpilot/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Rust engine](https://img.shields.io/badge/engine-Rust-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Polars](https://img.shields.io/badge/dataframes-Polars-CD792C?logo=polars&logoColor=white)](https://pola.rs/)
@@ -30,12 +30,12 @@ ingestion and cleaning, data quality, feature engineering, AutoML, explainabilit
 the model registry, deployment, monitoring, and plain-English insights. A **Rust engine**
 handles the heavy computation, and every stage shares one `fit` / `transform` / `save` contract.
 
-> **AutomatedCleaning is now MLPilot.** Install `mlpilot` and `import mlpilot`. Existing code and saved models keep working: see [Moving from AutomatedCleaning](#moving-from-automatedcleaning).
+> **AutomatedCleaning is now MLPilot.** Install `dataspoof-mlpilot` and `import mlpilot`. Existing code and saved models keep working: see [Moving from AutomatedCleaning](#moving-from-automatedcleaning).
 
 ## ⚡ Quick start
 
 ```bash
-pip install mlpilot
+pip install dataspoof-mlpilot
 ```
 
 ```python
@@ -190,9 +190,9 @@ Also: [Installation](#-installation) · [Why Rust + Python?](#-why-rust--python)
 ## 📦 Installation
 
 ```bash
-pip install mlpilot                    # lean core (pipelines, quality, features, AutoML, …)
-pip install "mlpilot[sql,excel]"       # + the extras you need (see below)
-pip install "mlpilot[all]"             # everything, like 1.x installed by default
+pip install dataspoof-mlpilot                    # lean core (pipelines, quality, features, AutoML, …)
+pip install "dataspoof-mlpilot[sql,excel]"       # + the extras you need (see below)
+pip install "dataspoof-mlpilot[all]"             # everything, like 1.x installed by default
 ```
 
 Since 2.0, the core install no longer pulls in the heavy dependencies (NLTK, Plotly, Presidio,
@@ -232,13 +232,17 @@ The import name is `mlpilot` (`import mlpilot as ac`). It needs
 MLPilot is the new name of **AutomatedCleaning** (renamed in 2.1.0, when the library had grown from
 data cleaning into the whole model lifecycle). Nothing else changed.
 
+On PyPI it is **`dataspoof-mlpilot`**: PyPI treats `mlpilot` as too close to an existing project. You
+install `dataspoof-mlpilot`, and import and run `mlpilot`, the same way `pip install scikit-learn`
+gives you `import sklearn`.
+
 ```bash
-pip uninstall AutomatedCleaning && pip install mlpilot
+pip uninstall AutomatedCleaning && pip install dataspoof-mlpilot
 ```
 
 | Before | Now |
 |---|---|
-| `pip install AutomatedCleaning` | `pip install mlpilot` |
+| `pip install AutomatedCleaning` | `pip install dataspoof-mlpilot` |
 | `import automatedcleaning as ac` | `import mlpilot as ac` |
 | `automatedcleaning serve ...` (CLI) | `mlpilot serve ...` |
 | `AutomatedCleaningWarning` | `MLPilotWarning` (the old name still works) |
@@ -250,7 +254,7 @@ pip uninstall AutomatedCleaning && pip install mlpilot
   the same library.
 - **Running services:** the `AC_*` environment variables and the `ac_*` Prometheus metrics keep
   their names, so deployments and dashboards are unaffected.
-- **The old package name:** `pip install AutomatedCleaning` now installs MLPilot through a small
+- **The old package name:** `pip install AutomatedCleaning` now installs MLPilot (`dataspoof-mlpilot`) through a small
   forwarding package (2.0.1).
 
 **Renamed with the library:**
@@ -299,7 +303,7 @@ result.fingerprint          # shape + schema + content hash (also logged with in
   Credentials come from `storage_options` or the standard environment variables.
 - **Databases:** `SQLSource` takes any SQLAlchemy URL (PostgreSQL, MySQL, SQL Server, Oracle,
   Redshift, DuckDB, …) or any DB-API connection. Install with
-  `pip install "mlpilot[sql]"` plus your database's driver.
+  `pip install "dataspoof-mlpilot[sql]"` plus your database's driver.
 - **Warehouses:** `SnowflakeSource` (`[snowflake]`) and `BigQuerySource` (`[bigquery]`) use the
   native connectors and fetch results as Arrow.
 - **APIs:** `RESTSource` handles token auth (pass the token, or read it from an environment
@@ -521,7 +525,7 @@ Steps that need optional libraries (`detect_language`, `redact_profanity`,
 `correct_spelling_text`) are installed via the extra:
 
 ```bash
-pip install "mlpilot[text]"
+pip install "dataspoof-mlpilot[text]"
 ```
 
 </details>
@@ -763,8 +767,8 @@ clusters.cluster_profiles(df)                         # size, share and averages
 ac.automl(df)                                         # no target -> AutoCluster; with target= -> AutoML
 ```
 
-Optional extras: `pip install "mlpilot[automl]"` (LightGBM, XGBoost) and
-`pip install "mlpilot[embeddings]"` (sentence-transformers).
+Optional extras: `pip install "dataspoof-mlpilot[automl]"` (LightGBM, XGBoost) and
+`pip install "dataspoof-mlpilot[embeddings]"` (sentence-transformers).
 
 <p align="right"><a href="#top">back to top ↑</a></p>
 
@@ -800,7 +804,7 @@ print(exp)                               # global importance (mean |SHAP|) + dir
 exp.global_importance()                  # feature, mean_abs_shap, share, direction
 exp.explain_row(0)                       # "P(Survived = 1) = 0.27 (average 0.42): Pclass = 3 (-0.174), ..."
 exp.for_row(0)                           # contributions for one row, largest first
-exp.to_shap()                            # a shap.Explanation for shap's plots: pip install "mlpilot[explain]"
+exp.to_shap()                            # a shap.Explanation for shap's plots: pip install "dataspoof-mlpilot[explain]"
 ac.partial_dependence(model, test, "Fare")   # average prediction as one feature varies
 ```
 
@@ -909,12 +913,12 @@ sizes are capped. Errors return JSON, and internal errors never leak details. Wi
 `prediction_log="preds.jsonl"`, every request is logged for monitoring.
 
 In production, run `gunicorn mlpilot.deploy.wsgi:app` with `AC_MODEL_PATH` set. Use
-waitress on Windows, and install either with `pip install "mlpilot[serve]"`.
+waitress on Windows, and install either with `pip install "dataspoof-mlpilot[serve]"`.
 
 **Docker.** `build_docker` writes a multi-stage Dockerfile: a non-root user, a health check,
 gunicorn, and the model baked in. The generated image has been built and tested end to end.
 
-**ONNX** (`pip install "mlpilot[onnx]"`) exports the trained estimator: linear models,
+**ONNX** (`pip install "dataspoof-mlpilot[onnx]"`) exports the trained estimator: linear models,
 random forests, extra trees and voting ensembles. Pass `sample=df` and the export is checked
 against the original model. HistGradientBoosting can't be exported yet because of an upstream
 skl2onnx limitation; the error says so.
@@ -1031,7 +1035,7 @@ summary:
   warning.
 - `llm=False` (the default) makes no network calls.
 
-Install the SDK with `pip install "mlpilot[llm]"`.
+Install the SDK with `pip install "dataspoof-mlpilot[llm]"`.
 
 <p align="right"><a href="#top">back to top ↑</a></p>
 
@@ -1039,7 +1043,7 @@ Install the SDK with `pip install "mlpilot[llm]"`.
 
 ## 🏛️ 11 · Hub: the platform server
 
-A multi-user server for teams, installed with `pip install "mlpilot[server]"`:
+A multi-user server for teams, installed with `pip install "dataspoof-mlpilot[server]"`:
 
 ```bash
 mlpilot hub create-admin --name admin      # prints an API token once
@@ -1258,7 +1262,7 @@ clips = media.AudioPreprocessor(16000, duration=3.0).transform(audio["path"])   
 feats = media.audio_features(audio["path"])                       # MFCCs + spectral features for AutoML
 ```
 
-**Images** (`pip install "mlpilot[image]"`):
+**Images** (`pip install "dataspoof-mlpilot[image]"`):
 - Phone-photo rotation (EXIF) is fixed automatically.
 - Near-duplicates are found by perceptual hashing, and blur is measured by the variance of the
   Laplacian.
@@ -1649,7 +1653,7 @@ path, with the GIL released so it scales across cores.
   - validation and parsing: `rapidfuzz`, `phonenumbers`, `email-validator`, `python-dateutil`
   - configs and contracts: `pyyaml`
 - **Optional extras** add everything else; see [Installation](#-installation).
-  `pip install "mlpilot[all]"` installs them all.
+  `pip install "dataspoof-mlpilot[all]"` installs them all.
 - **Claude-powered features** are optional: AI categorical corrections and insight narratives.
   They use your `ANTHROPIC_API_KEY`, and without it fall back to offline behaviour.
 

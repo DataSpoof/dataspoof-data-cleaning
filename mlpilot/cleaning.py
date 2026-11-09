@@ -40,7 +40,7 @@ def _require(module: str):
     except ImportError as exc:
         extra = _EXTRA_FOR.get(module.split(".")[0], "all")
         raise ImportError(f"This feature needs '{module.split('.')[0]}': "
-                          f'pip install "mlpilot[{extra}]"  (or [all])') from exc
+                          f'pip install "dataspoof-mlpilot[{extra}]"  (or [all])') from exc
 
 
 class _Lazy:

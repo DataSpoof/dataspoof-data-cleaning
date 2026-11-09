@@ -1,7 +1,7 @@
 # MLPilot
 
 !!! note "AutomatedCleaning is now MLPilot"
-    Install `mlpilot` and `import mlpilot`. Existing code and saved models keep working: see [Moving from AutomatedCleaning](installation.md#moving-from-automatedcleaning).
+    Install `dataspoof-mlpilot` and `import mlpilot`. Existing code and saved models keep working: see [Moving from AutomatedCleaning](installation.md#moving-from-automatedcleaning).
 
 
 **From raw data to a monitored production model: automated, explainable, auditable.**
@@ -15,7 +15,7 @@ handles the heavy computation, and every stage shares one `fit` / `transform` / 
 
 
 ```bash
-pip install mlpilot
+pip install dataspoof-mlpilot
 ```
 
 ```python

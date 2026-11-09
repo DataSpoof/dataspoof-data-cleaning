@@ -205,7 +205,7 @@ class AutoML:
             try:
                 import optuna
             except ImportError as exc:
-                raise ImportError('search="optuna" needs optuna: pip install "mlpilot[optuna]"') from exc
+                raise ImportError('search="optuna" needs optuna: pip install "dataspoof-mlpilot[optuna]"') from exc
             optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         def propose(spec):

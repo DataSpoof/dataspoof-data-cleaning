@@ -7,14 +7,14 @@ All notable changes are listed here. The project follows [Semantic Versioning](h
 
 ### Renamed: AutomatedCleaning is now MLPilot
 - **Names:**
-  - the distribution is `mlpilot` (`pip install mlpilot`);
+  - the distribution is `dataspoof-mlpilot` (PyPI refused `mlpilot` as too similar to an existing project);
   - the import is `import mlpilot`, and the CLI is `mlpilot`;
   - `MLPilotWarning` replaces `AutomatedCleaningWarning`, which remains as an alias.
 - **Compatibility:**
   - `import automatedcleaning` and pickles that refer to `automatedcleaning.*` classes resolve to
     the same `mlpilot` modules, so models saved by AutomatedCleaning keep loading with the same
     classes;
-  - the `AutomatedCleaning` project on PyPI gets a final 2.0.1 that installs `mlpilot`.
+  - the `AutomatedCleaning` project on PyPI gets a final 2.0.1 that installs `dataspoof-mlpilot`.
 - **Unchanged:** the `AC_*` environment variables, the `ac_*` Prometheus metrics and the saved-file
   formats (`dataspoof.*`).
 - **Renamed with the library:**

@@ -35,7 +35,7 @@ from typing import Any
 try:
     import boto3
 except ImportError as exc:                                   # pragma: no cover
-    raise ImportError('AWS deployment needs boto3: pip install "mlpilot[aws]"') from exc
+    raise ImportError('AWS deployment needs boto3: pip install "dataspoof-mlpilot[aws]"') from exc
 
 
 def _name(s: str) -> str:

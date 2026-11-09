@@ -42,9 +42,10 @@ def file_sha256(path) -> str:
 def versions() -> dict:
     from importlib import metadata
     out = {"python": platform.python_version(), "polars": pl.__version__}
-    for pkg in ("scikit-learn", "mlpilot", "lightgbm", "xgboost"):
+    for key, pkg in (("scikit-learn", "scikit-learn"), ("mlpilot", "dataspoof-mlpilot"), ("lightgbm", "lightgbm"),
+                     ("xgboost", "xgboost")):
         try:
-            out[pkg] = metadata.version(pkg)
+            out[key] = metadata.version(pkg)
         except metadata.PackageNotFoundError:
             pass
     return out

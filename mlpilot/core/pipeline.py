@@ -122,7 +122,7 @@ def _versions_cached() -> dict:
     out = {"format": FORMAT_VERSION, "python": platform.python_version(),
            "polars": pl.__version__}
     try:
-        out["mlpilot"] = metadata.version("mlpilot")
+        out["mlpilot"] = metadata.version("dataspoof-mlpilot")
     except metadata.PackageNotFoundError:
         out["mlpilot"] = "source"
     return out

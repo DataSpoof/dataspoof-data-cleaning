@@ -19,12 +19,12 @@ sizes are capped. Errors return JSON, and internal errors never leak details. Wi
 `prediction_log="preds.jsonl"`, every request is logged for monitoring.
 
 In production, run `gunicorn mlpilot.deploy.wsgi:app` with `AC_MODEL_PATH` set. Use
-waitress on Windows, and install either with `pip install "mlpilot[serve]"`.
+waitress on Windows, and install either with `pip install "dataspoof-mlpilot[serve]"`.
 
 **Docker.** `build_docker` writes a multi-stage Dockerfile: a non-root user, a health check,
 gunicorn, and the model baked in. The generated image has been built and tested end to end.
 
-**ONNX** (`pip install "mlpilot[onnx]"`) exports the trained estimator: linear models,
+**ONNX** (`pip install "dataspoof-mlpilot[onnx]"`) exports the trained estimator: linear models,
 random forests, extra trees and voting ensembles. Pass `sample=df` and the export is checked
 against the original model. HistGradientBoosting can't be exported yet because of an upstream
 skl2onnx limitation; the error says so.

@@ -373,9 +373,9 @@ def init_cicd(provider: str, *, name: str, data: str, target: str, out=".", metr
     if provider not in ("github", "gitlab"):
         raise ValueError("provider must be 'github' or 'gitlab'")
     try:
-        install = install or f"mlpilot[aws]=={version('mlpilot')}"
+        install = install or f"dataspoof-mlpilot[aws]=={version('dataspoof-mlpilot')}"
     except PackageNotFoundError:
-        install = install or "mlpilot[aws]"
+        install = install or "dataspoof-mlpilot[aws]"
     root = Path(out)
     files = {
         (".github/workflows/model-" + name + ".yml") if provider == "github" else ".gitlab-ci.yml":

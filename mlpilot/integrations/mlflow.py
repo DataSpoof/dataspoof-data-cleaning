@@ -33,7 +33,7 @@ try:
     from mlflow.entities import Metric, Param, RunTag
     from mlflow.tracking import MlflowClient
 except ImportError as exc:                                   # pragma: no cover
-    raise ImportError('The MLflow integration needs mlflow: pip install "mlpilot[mlflow]"') from exc
+    raise ImportError('The MLflow integration needs mlflow: pip install "dataspoof-mlpilot[mlflow]"') from exc
 
 SOURCE_TAG = "mlpilot.run_id"
 _STATUS = {"finished": "FINISHED", "failed": "FAILED", "running": "RUNNING", "killed": "KILLED"}
@@ -171,7 +171,7 @@ class AutoMLPyfunc(mlflow.pyfunc.PythonModel):
 def _requirements() -> list:
     from importlib import metadata
     reqs = []
-    for dist, name in (("mlpilot", "mlpilot"), ("polars", "polars"),
+    for dist, name in (("dataspoof-mlpilot", "dataspoof-mlpilot"), ("polars", "polars"),
                        ("scikit-learn", "scikit-learn"), ("pandas", "pandas"), ("pyarrow", "pyarrow"),
                        ("mlflow", "mlflow")):
         try:

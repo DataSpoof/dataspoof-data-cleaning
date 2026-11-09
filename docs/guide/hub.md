@@ -1,7 +1,7 @@
 # Hub: the platform server
 
 
-A multi-user server for teams, installed with `pip install "mlpilot[server]"`:
+A multi-user server for teams, installed with `pip install "dataspoof-mlpilot[server]"`:
 
 ```bash
 mlpilot hub create-admin --name admin      # prints an API token once

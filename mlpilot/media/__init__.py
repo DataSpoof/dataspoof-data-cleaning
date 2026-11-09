@@ -1,7 +1,7 @@
 """Image and audio data: quality audits, consistent preprocessing, and features for AutoML.
 
 * images: ``scan_images``, ``image_quality_report``, ``ImagePreprocessor``, ``image_features``,
-  ``augment`` (needs Pillow: ``pip install "mlpilot[image]"``)
+  ``augment`` (needs Pillow: ``pip install "dataspoof-mlpilot[image]"``)
 * audio:  ``scan_audio``, ``audio_quality_report``, ``AudioPreprocessor``, ``audio_features``,
   ``load_audio`` (WAV built in; other formats need ``[audio]``)
 

@@ -33,4 +33,4 @@ summary:
   warning.
 - `llm=False` (the default) makes no network calls.
 
-Install the SDK with `pip install "mlpilot[llm]"`.
+Install the SDK with `pip install "dataspoof-mlpilot[llm]"`.

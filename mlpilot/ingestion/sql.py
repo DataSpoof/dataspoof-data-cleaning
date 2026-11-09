@@ -58,7 +58,7 @@ class SQLSource:
                     connection = sqlite3.connect(connection[len("sqlite:///"):])
                 else:
                     raise ImportError('Database URLs need SQLAlchemy and a driver: pip install '
-                                      '"mlpilot[sql]" (+ e.g. psycopg, pymysql)') from None
+                                      '"dataspoof-mlpilot[sql]" (+ e.g. psycopg, pymysql)') from None
             else:
                 connection = sqlalchemy.create_engine(connection)
         self._conn = connection

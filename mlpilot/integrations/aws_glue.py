@@ -22,7 +22,7 @@ import polars as pl
 try:
     import boto3
 except ImportError as exc:                                   # pragma: no cover
-    raise ImportError('The AWS Glue integration needs boto3: pip install "mlpilot[aws]"') from exc
+    raise ImportError('The AWS Glue integration needs boto3: pip install "dataspoof-mlpilot[aws]"') from exc
 
 _FORMATS = {
     "parquet": {"InputFormat": "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat",

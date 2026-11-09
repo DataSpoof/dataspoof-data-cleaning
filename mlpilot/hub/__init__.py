@@ -7,7 +7,7 @@
 * ``HubClient``        Python client (standard library only).
 * CLI: ``mlpilot hub serve | create-admin``.
 
-The server needs ``pip install "mlpilot[server]"``; the client needs nothing extra.
+The server needs ``pip install "dataspoof-mlpilot[server]"``; the client needs nothing extra.
 """
 
 from .client import HubClient, HubError

@@ -1,7 +1,7 @@
 """Image data: audit a folder of images, preprocess them consistently, and turn them into
 features the tabular AutoML can learn from (no deep-learning dependency).
 
-Needs Pillow: ``pip install "mlpilot[image]"``.
+Needs Pillow: ``pip install "dataspoof-mlpilot[image]"``.
 
 * ``scan_images("photos/**/*.jpg")``       one row per file: size, mode, format, hashes, brightness,
                                              sharpness, readable or not
@@ -34,7 +34,7 @@ def _pil():
     try:
         from PIL import Image, ImageOps
     except ImportError as exc:
-        raise ImportError('Image support needs Pillow: pip install "mlpilot[image]"') from exc
+        raise ImportError('Image support needs Pillow: pip install "dataspoof-mlpilot[image]"') from exc
     return Image, ImageOps
 
 

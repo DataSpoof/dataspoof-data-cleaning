@@ -192,7 +192,7 @@ def _metadata(model, name: str | None, version) -> dict:
                     algorithm=model.best_["model"], metric=model.metric_)
     try:
         from importlib.metadata import version as _v
-        meta["library_version"] = _v("mlpilot")
+        meta["library_version"] = _v("dataspoof-mlpilot")
     except Exception:
         pass
     return meta
