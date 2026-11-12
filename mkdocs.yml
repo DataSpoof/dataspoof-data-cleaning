@@ -1,9 +1,12 @@
 site_name: MLPilot
 site_description: Automated data science, from raw data to monitored production models.
-site_url: https://dataspoof.github.io/dataspoof-data-cleaning/
-repo_url: https://github.com/DataSpoof/dataspoof-data-cleaning
-repo_name: DataSpoof/dataspoof-data-cleaning
+site_url: https://dataspoof.github.io/dataspoof-mlpilot/
+repo_url: https://github.com/DataSpoof/dataspoof-mlpilot
+repo_name: DataSpoof/dataspoof-mlpilot
 edit_uri: edit/main/docs/
+# docs/api is the GitHub-readable API reference (generated Markdown); the site uses reference/ (mkdocstrings).
+exclude_docs: |
+  api/
 copyright: MIT © Abhishek Kumar Singh / DataSpoof
 
 theme:

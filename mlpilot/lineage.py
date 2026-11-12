@@ -33,7 +33,7 @@ from pathlib import Path
 
 import polars as pl
 
-PRODUCER = "https://github.com/DataSpoof/dataspoof-data-cleaning"
+PRODUCER = "https://github.com/DataSpoof/dataspoof-mlpilot"
 SCHEMA_URL = "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent"
 _FACET = "https://openlineage.io/spec/facets/1-0-1/{}.json#/$defs/{}"
 

@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/)
-(see the [versioning policy](https://dataspoof.github.io/dataspoof-data-cleaning/policies/)).
+(see the [versioning policy](https://dataspoof.github.io/dataspoof-mlpilot/policies/)).
 
 ## [2.2.0] — 2026-11-12
 

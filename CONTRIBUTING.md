@@ -6,8 +6,8 @@ Thanks for helping! The basics:
 
 ```bash
 # needs the Rust toolchain: https://rustup.rs
-git clone https://github.com/DataSpoof/dataspoof-data-cleaning.git
-cd dataspoof-data-cleaning
+git clone https://github.com/DataSpoof/dataspoof-mlpilot.git
+cd dataspoof-mlpilot
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install maturin
 maturin develop --release --extras dev                  # builds the Rust extension in place

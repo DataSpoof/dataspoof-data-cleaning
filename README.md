@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![DataSpoof MLPilot](https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/images/DataSpoof%20MLPilot%20Neon%20Banner.png)
+![DataSpoof MLPilot](https://raw.githubusercontent.com/DataSpoof/dataspoof-mlpilot/main/images/DataSpoof%20MLPilot%20Neon%20Banner.png)
 
 # MLPilot
 
@@ -12,11 +12,13 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Rust engine](https://img.shields.io/badge/engine-Rust-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Polars](https://img.shields.io/badge/dataframes-Polars-CD792C?logo=polars&logoColor=white)](https://pola.rs/)
-[![Tests](https://img.shields.io/badge/tests-298%20passing-2ea44f)](#%EF%B8%8F-building--contributing)
+[![Tests](https://img.shields.io/badge/tests-323%20passing-2ea44f)](#%EF%B8%8F-building--contributing)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](#-license)
 
+**[What's new](#-whats-new-in-220)** ·
 **[Install](#-installation)** ·
 **[Quick start](#-quick-start)** ·
+**[Docs](#-documentation)** ·
 **[Modules](#-the-platform-at-a-glance)** ·
 **[Contents](#-contents)** ·
 **[Why Rust?](#-why-rust--python)**
@@ -31,6 +33,21 @@ the model registry, deployment, monitoring, and plain-English insights. A **Rust
 handles the heavy computation, and every stage shares one `fit` / `transform` / `save` contract.
 
 > **AutomatedCleaning is now MLPilot.** Install `dataspoof-mlpilot` and `import mlpilot`. Existing code and saved models keep working: see [Moving from AutomatedCleaning](#moving-from-automatedcleaning).
+
+## ✨ What's new in 2.2.0
+
+- **Images taken in hard conditions** ([guide](docs/guide/vision.md)):
+  - detect, simulate and remove fog, rain, snow, low light, glare, blur, noise and JPEG damage;
+  - faces partly covered by hair, masks or sunglasses: measured, simulated for training, blurred
+    for privacy;
+  - licence-plate detection and reading, in bad weather too;
+  - a robustness benchmark that scores any image model per condition.
+- **Quantization** ([guide](docs/guide/quantization.md)):
+  - int8 / fp16 ONNX models, measured on your data before you ship them;
+  - quantized embeddings;
+  - smaller column types that keep every value;
+  - a quantization release gate.
+- Full list: [CHANGELOG](CHANGELOG.md).
 
 ## ⚡ Quick start
 
@@ -125,7 +142,7 @@ and builds an EDA dashboard.
 
 ## 🗺️ How it all fits together
 
-<p align="center"><img src="https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/docs/assets/workflow.svg" alt="MLPilot workflow: data in, build and validate, release through isolated dev, QA and prod registries, and operate with feedback, monitoring and a retraining loop. Five gates can stop a run." width="100%"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/DataSpoof/dataspoof-mlpilot/main/docs/assets/workflow.svg" alt="MLPilot workflow: data in, build and validate, release through isolated dev, QA and prod registries, and operate with feedback, monitoring and a retraining loop. Five gates can stop a run." width="100%"></p>
 
 Read lane 1 left to right, lane 2 right to left, and so on: the flow snakes down the page.
 
@@ -181,9 +198,26 @@ Read lane 1 left to right, lane 2 right to left, and so on: the flow snakes down
 25. [Lineage & catalogs](#-25--lineage--catalogs)
 26. [Deploy on AWS](#%EF%B8%8F-26--deploy-on-aws)
 
-Also: [Installation](#-installation) · [Why Rust + Python?](#-why-rust--python) ·
+27. [Quantization & compression](#%EF%B8%8F-27--quantization--compression)
+
+Also: [Installation](#-installation) · [Documentation](#-documentation) · [Why Rust + Python?](#-why-rust--python) ·
 [Requirements](#-requirements) · [Building & contributing](#%EF%B8%8F-building--contributing) ·
 [License](#-license)
+
+---
+
+## 📖 Documentation
+
+| | |
+|---|---|
+| 🚀 [Installation](docs/installation.md) | extras, platforms, moving from AutomatedCleaning |
+| 📘 User guide | [Ingestion & connectors](docs/guide/ingestion.md) · [Data cleaning](docs/guide/cleaning.md) · [Profiling & data quality](docs/guide/quality.md) · [Data splitting](docs/guide/splitting.md) · [Feature engineering](docs/guide/features.md) · [Feature store](docs/guide/feature-store.md) · [Data versioning](docs/guide/versioning.md) · [Statistical testing](docs/guide/stats.md) · [AutoML](docs/guide/automl.md) · [Evaluation & explainability](docs/guide/evaluation.md) · [Model security](docs/guide/model-security.md) · [Tracking & registry](docs/guide/registry.md) · [Environments & CI/CD](docs/guide/environments-cicd.md) · [Deployment](docs/guide/deployment.md) · [Deploy on AWS](docs/guide/aws.md) · [Quantization & compression](docs/guide/quantization.md) · [Monitoring](docs/guide/monitoring.md) · [Observability](docs/guide/observability.md) · [Insights & reporting](docs/guide/insights.md) · [Hub (platform server)](docs/guide/hub.md) · [Secrets & policy](docs/guide/secrets-policy.md) · [Lineage & catalogs](docs/guide/lineage.md) · [Forecasting](docs/guide/forecasting.md) · [Causal & uplift](docs/guide/causal.md) · [Anomaly detection](docs/guide/anomaly.md) · [Image & audio data](docs/guide/media.md) · [Weather, faces & plates](docs/guide/vision.md) · [Integrations & scale](docs/guide/integrations.md) |
+| 🔎 [API reference](docs/api/README.md) | every public class and function, generated from the source |
+| 📓 [Titanic walkthrough](examples/titanic_walkthrough.ipynb) | every stage, end to end, on one dataset |
+| 🧭 [Workflow](docs/workflow.md) · [Architecture](docs/architecture.md) | how the stages connect; the Python frontend and the Rust engine |
+| 📝 [Changelog](CHANGELOG.md) · [Policies](docs/policies.md) · [Security](SECURITY.md) | releases, versioning and support, reporting vulnerabilities |
+
+<p align="right"><a href="#top">back to top ↑</a></p>
 
 ---
 
@@ -270,8 +304,8 @@ Update these if you deployed them from 2.0.0.
 
 ```bash
 pip install maturin                               # needs Rust: https://rustup.rs
-git clone https://github.com/DataSpoof/dataspoof-data-cleaning.git
-cd dataspoof-data-cleaning
+git clone https://github.com/DataSpoof/dataspoof-mlpilot.git
+cd dataspoof-mlpilot
 pip install .                                     # or: maturin develop --release (in a virtualenv)
 ```
 
@@ -1633,6 +1667,35 @@ Manager, a deployment circuit breaker with rollback, and CPU plus request-count 
 
 ---
 
+## ⚖️ 27 · Quantization & compression
+
+```python
+rep = ac.quantize_model(model, test, out="build/quantized")   # int8 + fp16 ONNX variants, measured
+print(rep.summary())                                         # size, speed, metric change, agreement
+ac.export_model(model, "build/onnx", "onnx", quantize="int8")
+ac.TextEmbeddings(columns=["review"], dtype="int8")          # 8x smaller embeddings
+small, report = ac.optimize_dtypes(df)                       # smaller column types, same values
+```
+
+- **Models:**
+  - int8 weights make files about 3–4× smaller, fp16 about 2×.
+  - Each variant is scored on your held-out data, and the report recommends the smallest one
+    within your limits. A `quantization` gate in `gates.yml` can enforce those limits in CI.
+  - It works on neural networks: AutoML's opt-in `mlp` model and your own ONNX models. Tree,
+    linear and k-NN models are reported as having nothing to quantize.
+- **Embeddings:** float32, float16 or int8 (per-dimension scale learned on training data).
+- **Tables:**
+  - `optimize_dtypes` and the `OptimizeDtypes` step shrink integers by range and turn
+    repetitive text into categories.
+  - Floats become Float32 only when every value survives the round trip, so prices stay exact
+    and large balances keep their cents.
+
+Details and measurements: [quantization guide](docs/guide/quantization.md).
+
+<p align="right"><a href="#top">back to top ↑</a></p>
+
+---
+
 ## 🦀 Why Rust + Python?
 
 The library is a **hybrid**: a friendly Python API on top, a fast Rust engine underneath.
@@ -1687,7 +1750,7 @@ path, with the GIL released so it scales across cores.
 ## 🛠️ Building & contributing
 
 The project uses **maturin** as its build backend (`pyproject.toml`). See
-[BUILD.md](https://github.com/DataSpoof/dataspoof-data-cleaning/blob/main/BUILD.md) for the full architecture and build/publish guide.
+[BUILD.md](https://github.com/DataSpoof/dataspoof-mlpilot/blob/main/BUILD.md) for the full architecture and build/publish guide.
 
 ```
 Cargo.toml            # Rust crate config
@@ -1707,9 +1770,11 @@ mlpilot/
   automl/             # AutoML + AutoCluster
   evaluation/         # metrics, SHAP, error analysis, fairness, model cards
   registry/           # experiment tracking + model registry
-  deploy/             # scoring, REST API, export, Docker, CLI
+  deploy/             # scoring, REST API, export, quantization, Docker, CLI
   monitoring/         # drift, alerts, retraining
   insights/           # findings, executive reports, LLM narratives
+  media/              # images & audio; weather conditions, faces, licence plates, robustness benchmark
+  compression.py      # value-preserving column types, quantized vectors
 tests/                # pytest suite
 ```
 

@@ -19,4 +19,4 @@ and forwards to it, so the following keep working:
 
 It receives no further updates. New features and fixes ship in `dataspoof-mlpilot`.
 
-Documentation and source: <https://github.com/DataSpoof/dataspoof-data-cleaning>
+Documentation and source: <https://github.com/DataSpoof/dataspoof-mlpilot>

@@ -12,7 +12,7 @@
 
 Please **don't open a public issue**. Report it privately in either of two ways:
 - through GitHub's
-  [private vulnerability reporting](https://github.com/DataSpoof/dataspoof-data-cleaning/security/advisories/new);
+  [private vulnerability reporting](https://github.com/DataSpoof/dataspoof-mlpilot/security/advisories/new);
 - by email to **dataspoof007@gmail.com**, with "SECURITY" in the subject.
 
 Include the affected version, how to reproduce the problem, and its impact. You'll get:
@@ -25,7 +25,7 @@ Include the affected version, how to reproduce the problem, and its impact. You'
 
 - **Signed releases:** wheels are published with PyPI Trusted Publishing (OIDC; no long-lived
   tokens) and carry signed build-provenance attestations. To check one, run
-  `gh attestation verify <file> --repo DataSpoof/dataspoof-data-cleaning`.
+  `gh attestation verify <file> --repo DataSpoof/dataspoof-mlpilot`.
 - **Software bill of materials:** every GitHub release includes a CycloneDX SBOM.
 - **Dependency audits:** every build checks Python dependencies with `pip-audit` and Rust
   dependencies with `cargo audit`.

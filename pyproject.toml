@@ -191,11 +191,11 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [project.urls]
-Homepage = "https://github.com/DataSpoof/dataspoof-data-cleaning"
-Repository = "https://github.com/DataSpoof/dataspoof-data-cleaning"
-Documentation = "https://dataspoof.github.io/dataspoof-data-cleaning/"
-Changelog = "https://github.com/DataSpoof/dataspoof-data-cleaning/blob/main/CHANGELOG.md"
-Issues = "https://github.com/DataSpoof/dataspoof-data-cleaning/issues"
+Homepage = "https://github.com/DataSpoof/dataspoof-mlpilot"
+Repository = "https://github.com/DataSpoof/dataspoof-mlpilot"
+Documentation = "https://dataspoof.github.io/dataspoof-mlpilot/"
+Changelog = "https://github.com/DataSpoof/dataspoof-mlpilot/blob/main/CHANGELOG.md"
+Issues = "https://github.com/DataSpoof/dataspoof-mlpilot/issues"
 
 [tool.maturin]
 # Mixed Rust/Python project: the `mlpilot` package lives at the repo

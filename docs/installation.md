@@ -82,8 +82,8 @@ Update these if you deployed them from 2.0.0.
 
 ```bash
 pip install maturin                               # needs Rust: https://rustup.rs
-git clone https://github.com/DataSpoof/dataspoof-data-cleaning.git
-cd dataspoof-data-cleaning
+git clone https://github.com/DataSpoof/dataspoof-mlpilot.git
+cd dataspoof-mlpilot
 pip install .                                     # or: maturin develop --release (in a virtualenv)
 ```
 

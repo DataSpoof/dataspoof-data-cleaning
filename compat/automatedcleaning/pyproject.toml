@@ -20,7 +20,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://pypi.org/project/dataspoof-mlpilot/"
-Source = "https://github.com/DataSpoof/dataspoof-data-cleaning"
+Source = "https://github.com/DataSpoof/dataspoof-mlpilot"
 
 [project.scripts]
 automatedcleaning = "mlpilot.deploy.cli:main"
