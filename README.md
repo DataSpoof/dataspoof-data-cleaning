@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![DataSpoof MLPilot](images/DataSpoof%20MLPilot%20Neon%20Banner.png)
+![DataSpoof MLPilot](https://raw.githubusercontent.com/DataSpoof/dataspoof-data-cleaning/main/images/DataSpoof%20MLPilot%20Neon%20Banner.png)
 
 # MLPilot
 
@@ -79,14 +79,14 @@ and builds an EDA dashboard.
 | 🤖 | **AutoML** | `automl` | Detects the task, runs a time-budgeted model search, builds an ensemble, and also does clustering. |
 | 🔍 | **Evaluation & explainability** | `evaluation` | Metrics with confidence intervals, calibration, **SHAP**, error analysis, **fairness and bias** checks, and **model cards**. |
 | 🗂️ | **Tracking & registry** | `registry` | Experiment runs and dataset fingerprints. Models move dev → staging → production, with metric gates and rollback. |
-| 🚀 | **Deployment** | `deploy` | Batch scoring, a REST API, ONNX and pickle export, **Docker images**, and a CLI. |
+| 🚀 | **Deployment** | `deploy` | Batch scoring, a REST API, ONNX and pickle export, **int8 / fp16 quantization**, **Docker images**, and a CLI. |
 | 📡 | **Monitoring** | `monitoring` | Data and prediction drift, accuracy decay, alerts and webhooks, and champion-vs-challenger **retraining**. |
 | 💡 | **Insights & reporting** | `insights` | Significance-tested findings, executive reports, and an optional narrative written by **Claude**. |
 | 🏛️ | **Hub (platform server)** | `hub` | Multi-user server: SSO (OIDC) and RBAC, a shared registry with two-person production approvals and policy gates, a tamper-evident audit log, a web UI, Helm and Terraform. |
 | 📈 | **Forecasting** | `forecast` | Multi-series, multi-step forecasts with backtests, calibrated intervals and hierarchical reconciliation. |
 | 🧪 | **Causal & uplift** | `causal` | Doubly-robust treatment effects with diagnostics, and per-customer uplift models. |
 | 🚨 | **Anomaly detection** | `anomaly` | An ensemble of three detectors with a plain-language reason for every flagged row. |
-| 🖼️ | **Image & audio data** | `media` | Quality audits (corrupt, duplicate, blurry, clipped, silent…), consistent preprocessing, and features that let AutoML classify images and sounds. |
+| 🖼️ | **Image & audio data** | `media` | Quality audits (corrupt, duplicate, blurry, clipped, silent…), consistent preprocessing, and features that let AutoML classify images and sounds. Weather / low-light detection, simulation and restoration, faces covered by hair, masks or sunglasses, licence-plate reading, face and plate blurring, and per-condition robustness benchmarks. |
 | 📐 | **Statistical testing** | `stats` | Chooses the right test for you (t-test, ANOVA, chi-square, …), with effect sizes, confidence intervals, A/B tests and power analysis. |
 | 🗃️ | **Data versioning** | `versioning` | Commit, tag, diff and restore exact dataset versions, linked to experiment runs. |
 | 🏪 | **Feature store** | `feature_store` | Define features once; leak-free point-in-time training data and low-latency online lookups. |
@@ -213,6 +213,7 @@ The import name is `mlpilot` (`import mlpilot as ac`). It needs
 | `dashboard` / `nlp` / `pii` | Plotly…, NLTK, Presidio | the EDA dashboard, text lemmatisation, PII masking (`clean_data` uses all three) |
 | `server` | FastAPI, SQLAlchemy, PyJWT, psycopg | the Hub platform server |
 | `image` / `audio` | Pillow / soundfile | image data; non-WAV audio (WAV needs nothing extra) |
+| `vision` / `ocr` | OpenCV 4 / + RapidOCR | faces (coverage by hair, mask, sunglasses; blurring) / licence-plate reading |
 | `mlflow` / `dvc` / `feast` / `evidently` | MLflow, DVC, Feast, Evidently | bridges to those tools (not in `all`: each is large) |
 | `aws` / `azure` | boto3 / azure-identity | Glue, SageMaker + ECR deploys, `aws-sm://` secrets; Azure Data Factory sign-in |
 | `optuna` / `skops` / `signing` | Optuna, skops, cryptography | Bayesian search, safe model export, model signing |
@@ -923,6 +924,14 @@ random forests, extra trees and voting ensembles. Pass `sample=df` and the expor
 against the original model. HistGradientBoosting can't be exported yet because of an upstream
 skl2onnx limitation; the error says so.
 
+**Quantization** shrinks neural-network models to 8-bit or 16-bit weights, and measures the
+cost on held-out data first. See the [quantization guide](docs/guide/quantization.md).
+
+```python
+rep = ac.quantize_model(model, test, out="build/quantized")   # int8 + fp16 variants: size, speed, metric, agreement
+ac.export_model(model, "build/onnx", "onnx", quantize="int8") # model trained with AutoML(..., include=["mlp"])
+```
+
 **The CLI** (also available as `python -m mlpilot.deploy`):
 
 ```bash
@@ -1276,6 +1285,22 @@ feats = media.audio_features(audio["path"])                       # MFCCs + spec
 - In testing, audio features separated two classes of tones with 100% accuracy.
 
 **Robustness:** a corrupt file is reported, never fatal to a batch.
+
+**Hard conditions** (`[image]`; faces need `[vision]`, plates need `[ocr]`). See the
+[guide](docs/guide/vision.md).
+
+```python
+from mlpilot.media import conditions, faces, plates, benchmark
+
+conditions.detect_conditions(img).tags            # ['fog', 'low_light']: also rain, snow, glare, blur, noise, jpeg
+per_image, coverage = conditions.condition_report("frames/")   # which conditions your data is missing
+fixed, steps = conditions.enhance(img)            # dehaze / brighten / denoise / sharpen as needed
+faces.face_occlusion(img)                         # coverage 0-1, likely='hair' | 'mask' | 'sunglasses' | 'object'
+faces.add_occluder(img, "hair", severity=3)       # simulate coverings for training
+plates.detect_plates(img, pattern="IN", enhance=True)   # [Plate(box, text='MH12AB1234', confidence=0.99)]
+out, found = faces.anonymize(img)                 # blur every face and licence plate
+rep = benchmark.condition_benchmark(predict, images, labels, faces=True)   # score per condition x severity
+```
 
 <p align="right"><a href="#top">back to top ↑</a></p>
 

@@ -175,7 +175,7 @@ class AutoML:
     # ── search ──────────────────────────────────────────────────────────────
     def _search(self, X, y, splitter):
         specs = [s for s in model_specs(self.task_.task)
-                 if (s.baseline or self.include is None or s.name in self.include)
+                 if (s.baseline or (s.name in self.include if self.include is not None else not s.opt_in))
                  and (self.exclude is None or s.name not in self.exclude)
                  and (s.max_rows is None or len(X) <= s.max_rows)]
         by_name = {s.name: s for s in specs}

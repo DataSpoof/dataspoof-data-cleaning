@@ -44,6 +44,9 @@ from .forecast import Forecaster, reconcile_bottom_up
 from .anomaly import AutoAnomaly
 from .causal import UpliftModel, estimate_effect, qini
 from .scale import to_sql, transform_file
+from . import compression
+from .compression import DtypeReport, OptimizeDtypes, dequantize_vectors, optimize_dtypes, quantize_vectors
+from .deploy.quantize import QuantizationReport, quantize_model, quantize_onnx
 from .ingestion import (BigQuerySource, IncrementalLoader, IngestResult, RESTSource, SnowflakeSource, SQLSource,
                         infer_types, ingest, read, read_file)
 

@@ -21,6 +21,7 @@ class ModelSpec:
     scale: bool = False        # needs standardised inputs
     max_rows: int | None = None
     baseline: bool = False
+    opt_in: bool = False       # only searched when named in AutoML(include=[...])
 
 
 def sample_params(space: dict, rng: np.random.Generator) -> dict:
@@ -87,6 +88,14 @@ def _knn(p, seed, classify):
     return cls(n_neighbors=p.get("n_neighbors", 15), weights=p.get("weights", "distance"))
 
 
+def _mlp(p, seed, classify):
+    from sklearn.neural_network import MLPClassifier, MLPRegressor
+    cls = MLPClassifier if classify else MLPRegressor
+    return cls(hidden_layer_sizes=tuple(p.get("hidden_layer_sizes", (128, 64))), alpha=p.get("alpha", 1e-4),
+               learning_rate_init=p.get("learning_rate_init", 1e-3), batch_size=p.get("batch_size", 256),
+               early_stopping=True, n_iter_no_change=10, max_iter=400, random_state=seed)
+
+
 def _lightgbm(p, seed, classify):
     import lightgbm as lgb
     cls = lgb.LGBMClassifier if classify else lgb.LGBMRegressor
@@ -128,6 +137,11 @@ def model_specs(task: str) -> list:
         ModelSpec("extra_trees", _forest("et"), {**_FOREST_SPACE, **weight}, {}),
         ModelSpec("knn", _knn, {"n_neighbors": ("int", 3, 50), "weights": ("choice", ["uniform", "distance"])},
                   {}, scale=True, max_rows=20000),
+        # A neural network: rarely the best on tabular data, but the one model family whose ONNX
+        # export int8 / fp16 quantization can shrink (mlpilot.deploy.quantize). Opt-in.
+        ModelSpec("mlp", _mlp, {"hidden_layer_sizes": ("choice", [(64,), (128,), (128, 64), (256, 128)]),
+                                "alpha": ("log", 1e-6, 1e-2), "learning_rate_init": ("log", 1e-4, 1e-2)},
+                  {}, scale=True, opt_in=True),
     ]
     boost_space = {"n_estimators": ("int", 100, 600), "learning_rate": ("log", 0.02, 0.3),
                    "subsample": ("uniform", 0.6, 1.0), "colsample_bytree": ("uniform", 0.6, 1.0)}
@@ -143,5 +157,6 @@ def model_specs(task: str) -> list:
 
 
 def available_models(task: str = "binary") -> list:
-    """Names of the models AutoML can try for ``task`` in this environment."""
+    """Names of the models AutoML can try for ``task`` in this environment (``mlp`` only runs
+    when named in ``include=``)."""
     return [s.name for s in model_specs(task)]

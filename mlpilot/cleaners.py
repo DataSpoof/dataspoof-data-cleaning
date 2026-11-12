@@ -330,8 +330,9 @@ class ClipOutliers(Step):
             dtype = df.schema[c]
             if dtype.is_integer():
                 lo, hi = math.ceil(lo), math.floor(hi)
-                if dtype.is_unsigned_integer():
-                    lo = max(lo, 0)
+                # a fence beyond what the type can hold (Int8 column, fence -200) clips nothing
+                info = np.iinfo(str(dtype).lower())          # "Int8" -> int8, "UInt16" -> uint16 ...
+                lo, hi = max(lo, int(info.min)), min(hi, int(info.max))
                 if lo > hi:
                     continue
             exprs.append(pl.col(c).clip(pl.lit(lo).cast(dtype), pl.lit(hi).cast(dtype)).alias(c))

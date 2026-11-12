@@ -21,6 +21,12 @@ Jenkins or Azure DevOps):
     fairness:   {sensitive: [gender], limits: {disparate_impact_ratio: 0.8}}
     robustness: {max_noise_flip: 0.05, min_median_adversarial_distance: 0.1, rows: 200}
     data:       {max_suspicious_share: 0.05}
+    quantization: {mode: int8, max_drop: 0.01, min_agreement: 0.99, required: false}
+
+``quantization`` checks that the model can ship quantized (``mlpilot.deploy.quantize``): the
+``mode`` variant must lose at most ``max_drop`` of the gate metric and agree with the original
+model on ``min_agreement`` of rows. Models with nothing to quantize (tree ensembles, linear
+models) pass with a note, unless ``required: true``.
 """
 
 from __future__ import annotations
@@ -140,9 +146,40 @@ def gate(model, data, gates: dict, *, report=None) -> dict:
                             f"(needs >= {rob['min_median_adversarial_distance']})")
         if rr.extreme["crashed"] or rr.extreme["non_finite"]:
             failures.append(f"robustness: extreme inputs break the model ({rr.extreme})")
+    qz = gates.get("quantization") or {}
+    if qz:
+        failures += _quantization_gate(m, df, qz, checks)
     result = {"passed": not failures, "failures": failures, "checks": checks}
     _write_json(report, result)
     return result
+
+
+def _quantization_gate(m, df, qz: dict, checks: dict) -> list:
+    mode = qz.get("mode", "int8")
+    try:
+        from .deploy.quantize import quantize_model
+        rep = quantize_model(m, df, modes=[mode], metric=qz.get("metric"), out=qz.get("out"),
+                             max_drop=float(qz.get("max_drop", 0.01)),
+                             min_agreement=float(qz.get("min_agreement", 0.99)))
+    except ImportError as exc:
+        checks["quantization"] = {"mode": mode, "skipped": True, "note": str(exc)}
+        return [f"quantization: {exc}"] if qz.get("required") else []
+    v = rep.variant(mode)
+    assert v is not None                      # quantize_model returns one variant per requested mode
+    checks["quantization"] = {"mode": mode, "metric": rep.metric, "skipped": v.path is None, "note": v.note,
+                              "size_bytes": v.size_bytes, "fp32_size_bytes": rep.variants[0].size_bytes,
+                              "compression": v.compression, "score_change": v.score_change,
+                              "agreement": v.agreement, "passed": rep.ok(v) if v.path else None}
+    if v.path is None:
+        return [f"quantization: {v.note}"] if qz.get("required") else []
+    problems = []
+    drop = rep.drop(v)
+    if drop is None or drop > rep.max_drop:
+        problems.append(f"quantization: {mode} changes {rep.metric} by {v.score_change} (allowed drop {rep.max_drop})")
+    if (v.agreement or 0) < rep.min_agreement:
+        problems.append(f"quantization: {mode} agrees with the original on {v.agreement:.1%} of rows "
+                        f"(needs {rep.min_agreement:.0%})")
+    return problems
 
 
 def register(model, registry, name: str, *, metrics=None, stage: str = "dev", description: str | None = None,
@@ -166,6 +203,10 @@ robustness:
   max_noise_flip: 0.05                    # share of predictions changed by 5%-of-sd noise
   min_median_adversarial_distance: 0.05   # in standard deviations
   rows: 200
+# quantization:                           # ship an int8 / fp16 ONNX model (neural networks only)
+#   mode: int8
+#   max_drop: 0.01                        # largest allowed loss of the metric
+#   min_agreement: 0.99                   # share of predictions that must not change
 """
 
 ENVIRONMENTS_TEMPLATE = """# Isolated environments; models move dev -> qa -> prod only through `mlpilot release`.

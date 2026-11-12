@@ -62,14 +62,14 @@ See [Workflow](workflow.md) for how to read it.
 | 🤖 | **AutoML** | `automl` | Detects the task, runs a time-budgeted model search, builds an ensemble, and also does clustering. |
 | 🔍 | **Evaluation & explainability** | `evaluation` | Metrics with confidence intervals, calibration, **SHAP**, error analysis, **fairness and bias** checks, and **model cards**. |
 | 🗂️ | **Tracking & registry** | `registry` | Experiment runs and dataset fingerprints. Models move dev → staging → production, with metric gates and rollback. |
-| 🚀 | **Deployment** | `deploy` | Batch scoring, a REST API, ONNX and pickle export, **Docker images**, and a CLI. |
+| 🚀 | **Deployment** | `deploy` | Batch scoring, a REST API, ONNX and pickle export, **int8 / fp16 quantization**, **Docker images**, and a CLI. |
 | 📡 | **Monitoring** | `monitoring` | Data and prediction drift, accuracy decay, alerts and webhooks, and champion-vs-challenger **retraining**. |
 | 💡 | **Insights & reporting** | `insights` | Significance-tested findings, executive reports, and an optional narrative written by **Claude**. |
 | 🏛️ | **Hub (platform server)** | `hub` | Multi-user server: SSO (OIDC) and RBAC, a shared registry with two-person production approvals and policy gates, a tamper-evident audit log, a web UI, Helm and Terraform. |
 | 📈 | **Forecasting** | `forecast` | Multi-series, multi-step forecasts with backtests, calibrated intervals and hierarchical reconciliation. |
 | 🧪 | **Causal & uplift** | `causal` | Doubly-robust treatment effects with diagnostics, and per-customer uplift models. |
 | 🚨 | **Anomaly detection** | `anomaly` | An ensemble of three detectors with a plain-language reason for every flagged row. |
-| 🖼️ | **Image & audio data** | `media` | Quality audits (corrupt, duplicate, blurry, clipped, silent…), consistent preprocessing, and features that let AutoML classify images and sounds. |
+| 🖼️ | **Image & audio data** | `media` | Quality audits (corrupt, duplicate, blurry, clipped, silent…), consistent preprocessing, and features that let AutoML classify images and sounds. Weather / low-light detection, simulation and restoration, faces covered by hair, masks or sunglasses, licence-plate reading, face and plate blurring, and per-condition robustness benchmarks. |
 | 📐 | **Statistical testing** | `stats` | Chooses the right test for you (t-test, ANOVA, chi-square, …), with effect sizes, confidence intervals, A/B tests and power analysis. |
 | 🗃️ | **Data versioning** | `versioning` | Commit, tag, diff and restore exact dataset versions, linked to experiment runs. |
 | 🏪 | **Feature store** | `feature_store` | Define features once; leak-free point-in-time training data and low-latency online lookups. |

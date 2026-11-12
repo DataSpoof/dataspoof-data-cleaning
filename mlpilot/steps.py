@@ -406,7 +406,11 @@ def normalize_booleans(df: pl.DataFrame, columns=None) -> pl.DataFrame:
 
 
 def downcast_numeric(df: pl.DataFrame) -> pl.DataFrame:
-    """Shrink numeric columns to the smallest dtype that fits (int64->int32 ...)."""
+    """Shrink numeric columns to the smallest dtype that fits (int64->int32 ...).
+
+    Types are chosen per call, so two batches can come out with different types, and floats
+    can lose digits. For value-preserving types learned once and reused, use
+    ``mlpilot.compression.optimize_dtypes`` or the ``OptimizeDtypes`` pipeline step."""
     _header("Downcasting numeric dtypes")
     num = _numeric_cols(df)
     if num:

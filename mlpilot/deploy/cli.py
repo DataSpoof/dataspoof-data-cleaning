@@ -75,6 +75,15 @@ def main(argv=None):
     e.add_argument("--model", required=True)
     e.add_argument("--out", required=True)
     e.add_argument("--format", default="bundle", choices=["bundle", "pickle", "onnx", "skops"])
+    e.add_argument("--quantize", choices=["int8", "uint8", "fp16"], help="with --format onnx: 8/16-bit weights")
+
+    q = sub.add_parser("quantize", help="quantize a model to int8 / fp16 ONNX and compare on held-out data")
+    q.add_argument("--model", required=True)
+    q.add_argument("--data", required=True, help="held-out rows with the target (CSV / Parquet / ...)")
+    q.add_argument("--out", required=True)
+    q.add_argument("--modes", default="int8,fp16")
+    q.add_argument("--metric")
+    q.add_argument("--max-drop", type=float, default=0.01)
 
     m = sub.add_parser("monitor", help="check a batch of data against a saved monitor")
     m.add_argument("--model", required=True)
@@ -121,7 +130,13 @@ def main(argv=None):
         print(f"Docker context written to {out}. Build it with: docker build -t {args.name} {out}")
     elif args.cmd == "export":
         from .export import export_model
-        print(export_model(path, args.out, format=args.format))
+        print(export_model(path, args.out, format=args.format, quantize=args.quantize))
+    elif args.cmd == "quantize":
+        from ..ingestion import read
+        from .quantize import quantize_model
+        rep = quantize_model(path, read(args.data), modes=[m.strip() for m in args.modes.split(",") if m.strip()],
+                             out=args.out, metric=args.metric, max_drop=args.max_drop)
+        print(rep.summary())
     elif args.cmd == "monitor":
         import polars as pl
 

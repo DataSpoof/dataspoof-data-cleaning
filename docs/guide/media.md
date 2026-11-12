@@ -30,3 +30,19 @@ feats = media.audio_features(audio["path"])                       # MFCCs + spec
 - In testing, audio features separated two classes of tones with 100% accuracy.
 
 **Robustness:** a corrupt file is reported, never fatal to a batch.
+
+**Hard conditions** (`[image]`; faces need `[vision]`, plates need `[ocr]`). See the
+[guide](vision.md).
+
+```python
+from mlpilot.media import conditions, faces, plates, benchmark
+
+conditions.detect_conditions(img).tags            # ['fog', 'low_light']: also rain, snow, glare, blur, noise, jpeg
+per_image, coverage = conditions.condition_report("frames/")   # which conditions your data is missing
+fixed, steps = conditions.enhance(img)            # dehaze / brighten / denoise / sharpen as needed
+faces.face_occlusion(img)                         # coverage 0-1, likely='hair' | 'mask' | 'sunglasses' | 'object'
+faces.add_occluder(img, "hair", severity=3)       # simulate coverings for training
+plates.detect_plates(img, pattern="IN", enhance=True)   # [Plate(box, text='MH12AB1234', confidence=0.99)]
+out, found = faces.anonymize(img)                 # blur every face and licence plate
+rep = benchmark.condition_benchmark(predict, images, labels, faces=True)   # score per condition x severity
+```

@@ -13,7 +13,7 @@ from ..automl._persist import file_sha256
 from .scoring import expected_columns, resolve_model
 
 
-def export_model(model, path, format: str = "bundle", *, sample=None) -> Path:
+def export_model(model, path, format: str = "bundle", *, sample=None, quantize: str | None = None) -> Path:
     """Export a fitted model.
 
     * ``"bundle"`` (default): a directory with ``manifest.json``, ``model.joblib`` and
@@ -26,8 +26,13 @@ def export_model(model, path, format: str = "bundle", *, sample=None) -> Path:
       for ONNX Runtime / other languages. The graph takes the *model-ready* columns (after
       AutoML's cleaning & feature steps); ``preprocess.json`` is written next to it, and
       ``io.json`` lists the input names and types. Pass ``sample`` (raw rows) to check the
-      ONNX predictions match (needs ``onnxruntime``).
+      ONNX predictions match (needs ``onnxruntime``). ``quantize="int8"`` / ``"uint8"`` /
+      ``"fp16"`` also writes ``model.<mode>.onnx`` with 8- or 16-bit weights and returns its path
+      (neural-network models only; see ``mlpilot.deploy.quantize``, and ``quantize_model`` to
+      compare every mode on held-out data first).
     """
+    if quantize is not None and format != "onnx":
+        raise ValueError("quantize= works with format='onnx'")
     model = resolve_model(model)
     path = Path(path)
     if format == "bundle":
@@ -41,7 +46,21 @@ def export_model(model, path, format: str = "bundle", *, sample=None) -> Path:
         path.with_name(path.name + ".sha256").write_text(f"{file_sha256(path)}  {path.name}\n")
         return path
     if format == "onnx":
-        return _to_onnx(model, path, sample)
+        onnx_path = _to_onnx(model, path, sample)
+        if quantize is None:
+            return onnx_path
+        from .quantize import quantize_onnx
+        qpath = quantize_onnx(onnx_path, onnx_path.with_name(f"model.{quantize}.onnx"), quantize)
+        if sample is not None:
+            agreement = _onnx_agreement(model, qpath, sample)
+            io_file = onnx_path.parent / "io.json"
+            io = json.loads(io_file.read_text(encoding="utf-8"))
+            io["quantized"] = {"mode": quantize, "file": qpath.name, "agreement_on_sample": agreement}
+            io_file.write_text(json.dumps(io, indent=2, default=str), encoding="utf-8")
+            if agreement < 0.95:
+                raise RuntimeError(f"The {quantize} model agrees with the original on only {agreement:.1%} of the "
+                                   "sample; don't use it (try fp16, or quantize_model() to compare).")
+        return qpath
     if format == "skops":
         return _to_skops(model, path)
     raise ValueError("format must be 'bundle', 'pickle', 'onnx' or 'skops'")
@@ -156,6 +175,19 @@ def onnx_inputs(model, df) -> dict:
         col = X[c].to_numpy()
         feeds[c] = (col.astype(np.float32) if k == "num" else col.astype(str)).reshape(-1, 1)
     return feeds
+
+
+def _onnx_agreement(model, path: Path, sample) -> float:
+    """Share of ``sample`` rows where the ONNX model predicts what the original model predicts."""
+    import onnxruntime as ort
+    sess = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+    got = np.asarray(sess.run(None, onnx_inputs(model, sample))[0]).ravel()
+    expected = np.asarray(model.model_.predict(model._features(sample)))
+    if model.classes_ is not None:
+        return float(np.mean(got.astype(int) == expected.astype(int)))
+    from .quantize import REGRESSION_TOLERANCE
+    scale = float(np.std(expected)) or 1.0
+    return float(np.mean(np.abs(got.astype(float) - expected.astype(float)) <= REGRESSION_TOLERANCE * scale))
 
 
 def _verify_onnx(model, path: Path, sample):

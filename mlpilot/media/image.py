@@ -290,15 +290,27 @@ def _hog(gray: np.ndarray, cells: int = 4, bins: int = 9) -> np.ndarray:
     return np.concatenate(feats)
 
 
+def _items(source) -> list:
+    """``[(name, image_or_None)]``: in-memory PIL images are named ``<image i>``; paths load lazily."""
+    Image, _ = _pil()
+    if isinstance(source, Image.Image):
+        return [("<image 0>", source)]
+    if isinstance(source, (list, tuple)) and source and all(isinstance(x, Image.Image) for x in source):
+        return [(f"<image {i}>", im) for i, im in enumerate(source)]
+    return [(p, None) for p in _paths(source)]
+
+
 def image_features(source, *, size: int = 64, color_bins: int = 8, hog_cells: int = 4) -> pl.DataFrame:
     """Hand-crafted features per image (``path`` + numeric columns) so ``AutoML`` can classify
     images without a GPU: per-channel colour histograms and moments, HSV saturation, edge
-    density, an edge-orientation (HOG-like) grid, sharpness, brightness and aspect ratio."""
+    density, an edge-orientation (HOG-like) grid, sharpness, brightness and aspect ratio.
+
+    ``source``: a folder, glob or list of paths, or in-memory PIL images (named ``<image i>``)."""
     Image, ImageOps = _pil()
     rows, skipped = [], []
-    for path in _paths(source):
+    for path, im in _items(source):
         try:
-            im = open_image(path, "RGB")
+            im = open_image(path, "RGB") if im is None else im.convert("RGB")
         except Exception as exc:                 # one corrupt file must not sink the whole batch
             skipped.append(f"{path} ({type(exc).__name__})")
             continue

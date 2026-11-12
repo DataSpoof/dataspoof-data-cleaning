@@ -29,6 +29,14 @@ random forests, extra trees and voting ensembles. Pass `sample=df` and the expor
 against the original model. HistGradientBoosting can't be exported yet because of an upstream
 skl2onnx limitation; the error says so.
 
+**Quantization** shrinks neural-network models to 8-bit or 16-bit weights, and measures the
+cost on held-out data first. See the [quantization guide](quantization.md).
+
+```python
+rep = ac.quantize_model(model, test, out="build/quantized")   # int8 + fp16 variants: size, speed, metric, agreement
+ac.export_model(model, "build/onnx", "onnx", quantize="int8") # model trained with AutoML(..., include=["mlp"])
+```
+
 **The CLI** (also available as `python -m mlpilot.deploy`):
 
 ```bash

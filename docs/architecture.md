@@ -13,19 +13,19 @@ You install one wheel and write normal Python — the Rust is invisible.
 
 ```
 ┌─────────────────────────── your code ───────────────────────────┐
-│  import mlpilot as ac                                  │
-│  df = ac.load_data("data.csv"); ac.clean_data(df)                │
+│  import mlpilot as ac                                           │
+│  df = ac.load_data("data.csv"); ac.clean_data(df)               │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ calls
 ┌──────────────────────────────▼──────────────────────────────────┐
-│  Python frontend  (mlpilot/cleaning.py)                │
-│    Polars • scikit-learn • Plotly • Presidio • LangChain         │
+│  Python frontend  (mlpilot/cleaning.py)                         │
+│    Polars • scikit-learn • Plotly • Presidio • LangChain        │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ delegates hot loops
 ┌──────────────────────────────▼──────────────────────────────────┐
-│  🦀 Rust backend  (_rustcore, built with PyO3 + rayon)           │
-│    text cleaning • skewness • IQR • correlation • JSON detect     │
-└──────────────────────────────────────────────────────────────────┘
+│  🦀 Rust backend  (_rustcore, built with PyO3 + rayon)          │
+│    text cleaning • skewness • IQR • correlation • JSON detect   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 **Benchmark** — text preprocessing over 50,000 rows: **~3.8× faster** than the pure-Python

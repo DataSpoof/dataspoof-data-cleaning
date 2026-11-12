@@ -25,6 +25,7 @@ The import name is `mlpilot` (`import mlpilot as ac`). It needs
 | `dashboard` / `nlp` / `pii` | Plotly…, NLTK, Presidio | the EDA dashboard, text lemmatisation, PII masking (`clean_data` uses all three) |
 | `server` | FastAPI, SQLAlchemy, PyJWT, psycopg | the Hub platform server |
 | `image` / `audio` | Pillow / soundfile | image data; non-WAV audio (WAV needs nothing extra) |
+| `vision` / `ocr` | OpenCV 4 / + RapidOCR | faces (coverage by hair, mask, sunglasses; blurring) / licence-plate reading |
 | `mlflow` / `dvc` / `feast` / `evidently` | MLflow, DVC, Feast, Evidently | bridges to those tools (not in `all`: each is large) |
 | `aws` / `azure` | boto3 / azure-identity | Glue, SageMaker + ECR deploys, `aws-sm://` secrets; Azure Data Factory sign-in |
 | `optuna` / `skops` / `signing` | Optuna, skops, cryptography | Bayesian search, safe model export, model signing |

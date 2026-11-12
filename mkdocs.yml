@@ -90,6 +90,7 @@ nav:
       - Anomaly detection: guide/anomaly.md
       - Integrations & scale: guide/integrations.md
       - Image & audio data: guide/media.md
+      - Weather, faces & plates: guide/vision.md
       - Statistical testing: guide/stats.md
       - Data versioning: guide/versioning.md
       - Feature store: guide/feature-store.md
@@ -100,6 +101,7 @@ nav:
       - Observability: guide/observability.md
       - Lineage & catalogs: guide/lineage.md
       - Deploy on AWS: guide/aws.md
+      - Quantization & compression: guide/quantization.md
   - API reference:
       - Ingestion: reference/ingestion.md
       - Pipeline core: reference/core.md
@@ -120,6 +122,7 @@ nav:
       - Model signing: reference/security.md
       - Integrations: reference/integrations.md
       - Image & audio: reference/media.md
+      - Quantization & compression: reference/compression.md
       - Statistical testing: reference/stats.md
       - Data versioning: reference/versioning.md
       - Feature store: reference/feature_store.md

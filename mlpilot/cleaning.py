@@ -814,12 +814,12 @@ def check_cardinality(df: pl.DataFrame):
 
 def save_cleaned_data(df: pl.DataFrame, file_name="cleaned_data.csv", quantize=True):
     """
-    Save cleaned DataFrame to a CSV file with optional quantization for float and integer columns.
+    Save cleaned DataFrame to a CSV file, optionally with compact (value-preserving) numeric types.
     
     Parameters:
     - df (pl.DataFrame): The input Polars dataframe.
     - file_name (str): The name of the CSV file.
-    - quantize (bool): Whether to quantize numeric columns (default: True).
+    - quantize (bool): Whether to shrink numeric types without changing values (default: True).
     
     Returns:
     - None
@@ -828,12 +828,11 @@ def save_cleaned_data(df: pl.DataFrame, file_name="cleaned_data.csv", quantize=T
     print("\n🔹 Saving cleaned data...")
 
     if quantize:
-        # Convert float64 -> float32, int64 -> int32 to reduce size
-        float_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in [pl.Float64, pl.Float32]]
-        int_cols = [col for col, dtype in zip(df.columns, df.dtypes) if dtype in [pl.Int64, pl.Int32]]
-
-        df = df.with_columns([df[col].cast(pl.Float32) for col in float_cols])
-        df = df.with_columns([df[col].cast(pl.Int32) for col in int_cols])
+        # Smaller types without changing values: integers to the smallest type that holds them
+        # (a blind Int64 -> Int32 cast failed on ids above 2.1 billion), floats to Float32 only
+        # when every value round-trips at its written precision (see mlpilot.compression).
+        from .compression import optimize_dtypes
+        df, _ = optimize_dtypes(df, categorical=None)
 
     # Save to CSV
     df.write_csv(file_name)

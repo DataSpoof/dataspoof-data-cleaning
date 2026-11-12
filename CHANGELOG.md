@@ -3,6 +3,64 @@
 All notable changes are listed here. The project follows [Semantic Versioning](https://semver.org/)
 (see the [versioning policy](https://dataspoof.github.io/dataspoof-data-cleaning/policies/)).
 
+## [2.2.0] — 2026-11-12
+
+### Added: images taken in hard conditions
+- **Weather and lighting** (`media.conditions`):
+  - detects fog, rain, snow, low light, glare, motion blur, sensor noise and JPEG damage
+    (each scored 0-1 and tagged at 0.5);
+  - `condition_report` shows which conditions a dataset covers and flags the rare or missing ones;
+  - `apply_condition` simulates all of them, plus shadow and cutout, at severity 1-5;
+  - `enhance` restores images: dehaze, low-light brightening, denoise, sharpen.
+- **Faces** (`media.faces`, `[vision]` extra):
+  - detection;
+  - how much of a face is covered, and by what (hair, mask, sunglasses or object), in a per-image
+    `occlusion_report`;
+  - simulated coverings for training;
+  - blurring or pixelating for privacy (`anonymize`, `blur_regions`).
+- **Licence plates** (`media.plates`, `[ocr]` extra):
+  - detection and OCR, with plate patterns (`IN`, `IN_BH`, `UK`, `EU`, `US`) that fix OCR
+    look-alikes;
+  - optional restoration before reading;
+  - `plate_report`, which pairs each read with the conditions in the image.
+- **Robustness benchmark** (`media.benchmark`):
+  - `condition_benchmark` re-scores any image model per condition and severity, with face
+    coverings included;
+  - `condition_augment` builds training sets from the weakest conditions;
+  - ready-made predictors for AutoML image classifiers, plate reading and face counting.
+- New extras: `vision` (OpenCV 4: OpenCV 5 no longer ships the detector models) and `ocr`
+  (RapidOCR; its models are bundled, so nothing is downloaded at run time).
+- Image functions also accept numpy arrays, alongside PIL images and paths.
+
+### Added: quantization
+- **Models** (`mlpilot.deploy.quantize`, `[onnx]` extra):
+  - `quantize_model` writes int8 and fp16 ONNX variants of a model and measures each on held-out
+    data (file size, speed, metric change and agreement with the original), then recommends
+    one;
+  - `export_model(..., format="onnx", quantize="int8" | "uint8" | "fp16")`, `quantize_onnx`
+    for any ONNX model, and a `mlpilot quantize` CLI command;
+  - models with nothing to quantize (tree ensembles, linear models, k-NN) are reported as
+    such rather than exported unchanged.
+- **AutoML:** a new opt-in `mlp` model family (scikit-learn neural network), used only when
+  named in `include=`. It is the AutoML model family that quantization shrinks.
+- **CI/CD:** a `quantization` gate in `gates.yml` (`mode`, `max_drop`, `min_agreement`,
+  `required`).
+- **Embeddings:**
+  - `TextEmbeddings(dtype="float32" | "float16" | "int8")`;
+  - `quantize_vectors` / `dequantize_vectors` with a per-dimension int8 scale learned on
+    training data.
+- **Tables:**
+  - `optimize_dtypes` and the `OptimizeDtypes` pipeline step shrink column types without
+    changing values (integers by range, floats only when they survive the round trip, text
+    to Categorical);
+  - the step learns the types on training data and never overflows on new data.
+
+### Fixed
+- `save_cleaned_data(quantize=True)` no longer fails on integers above 2.1 billion (it cast
+  every `Int64` column to `Int32`).
+- `ClipOutliers` no longer fails on small integer columns (`Int8`, `Int16`, `UInt8`, …)
+  whose learned fences lie outside the type's range.
+
 ## [2.1.0] — 2026-11-09
 
 ### Renamed: AutomatedCleaning is now MLPilot

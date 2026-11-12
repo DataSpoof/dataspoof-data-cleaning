@@ -7,7 +7,7 @@ build-backend = "maturin"
 # The PyPI name is "dataspoof-mlpilot" ("mlpilot" is too close to an existing "ml-pilot");
 # the import name and the CLI are `mlpilot`.
 name = "dataspoof-mlpilot"
-version = "2.1.0"
+version = "2.2.0"
 description = "MLPilot (formerly AutomatedCleaning): automated data science, from raw data to monitored production models, with a Rust engine"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -112,6 +112,18 @@ server = [
 image = [
     "pillow>=10.0",
 ]
+# Faces (detection, coverage by hair / mask / sunglasses, blurring) and plate-shaped regions.
+# OpenCV 4: version 5 no longer ships the face / eye / plate detector models.
+vision = [
+    "pillow>=10.0",
+    "opencv-python-headless>=4.8,<5",
+]
+# Licence-plate and text reading (RapidOCR; its ONNX models are bundled, no download at run time).
+ocr = [
+    "dataspoof-mlpilot[vision]",
+    "rapidocr>=3.0",
+    "onnxruntime>=1.17",
+]
 audio = [
     "soundfile>=0.12",
 ]
@@ -163,7 +175,7 @@ embeddings = [
 ]
 # Everything (what 1.x installed by default, plus every optional connector and integration).
 all = [
-    "dataspoof-mlpilot[nlp,dashboard,pii,llm,text,automl,explain,sql,excel,onnx,serve,optuna,skops,signing,server,image,audio,aws,azure]",
+    "dataspoof-mlpilot[nlp,dashboard,pii,llm,text,automl,explain,sql,excel,onnx,serve,optuna,skops,signing,server,image,vision,ocr,audio,aws,azure]",
 ]
 dev = [
     "dataspoof-mlpilot[all,test]",
